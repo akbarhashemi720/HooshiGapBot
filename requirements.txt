@@ -2,3 +2,5 @@ python-telegram-bot
 httpx
 pygeohash
 pydub
+fastapi
+uvicorn
