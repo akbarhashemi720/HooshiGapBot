@@ -1,0 +1,1 @@
+# HooshiGap Platform Adapters
