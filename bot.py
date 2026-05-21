@@ -25,6 +25,7 @@ from voice import (
 SUPABASE_URL = "https://ahjdziimhlpynvvwhgiz.supabase.co"
 SUPABASE_KEY = "sb_publishable_DBlfUH3YcVEsCJ2m-3tOWg_nJNMBh5R"
 BOT_USERNAME = "HooshiGapBot"
+ADMIN_IDS = [7049305054]
 
 GENDER, AGE, PROVINCE, CITY, INTERESTS, PHOTO = range(6)
 SEARCH_GENDER, SEARCH_AGE, SEARCH_PROVINCE = range(6, 9)
@@ -111,6 +112,31 @@ async def save_chat_history(user1, user2):
         if not existing2:
             await db_post("chat_history", {"user1": user1, "user2": user2})
 
+async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    my_id = update.effective_user.id
+    if my_id not in ADMIN_IDS:
+        await update.message.reply_text("\u062f\u0633\u062a\u0631\u0633\u06cc \u0646\u062f\u0627\u0631\u06cc\u062f!")
+        return
+    total = len(await db_get("users", ""))
+    vip_count = len(await db_get("users", "is_vip=eq.true"))
+    voice_count = len(await db_get("users", "has_voice=eq.true"))
+    reports = len(await db_get("reports", ""))
+    blocks = len(await db_get("blocks", ""))
+    text = (
+        f"\U0001f4ca \u067e\u0646\u0644 \u0627\u062f\u0645\u06cc\u0646\n"
+        f"\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n"
+        f"\U0001f465 \u06a9\u0644 \u06a9\u0627\u0631\u0628\u0631\u0627\u0646: {total}\n"
+        f"\u2b50 \u06a9\u0627\u0631\u0628\u0631\u0627\u0646 VIP: {vip_count}\n"
+        f"\U0001f3a4 \u062f\u0627\u0631\u0627\u06cc \u0648\u06cc\u0633: {voice_count}\n"
+        f"\u26a0\ufe0f \u06af\u0632\u0627\u0631\u0634\u200c\u0647\u0627: {reports}\n"
+        f"\u26d4 \u0628\u0644\u0627\u06a9\u200c\u0647\u0627: {blocks}\n"
+    )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("\U0001f465 \u0644\u06cc\u0633\u062a \u06a9\u0627\u0631\u0628\u0631\u0627\u0646", callback_data="admin_users")],
+        [InlineKeyboardButton("\u26a0\ufe0f \u06af\u0632\u0627\u0631\u0634\u200c\u0647\u0627", callback_data="admin_reports")],
+    ])
+    await update.message.reply_text(text, reply_markup=keyboard)
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     my_id = update.effective_user.id
     args = context.args
@@ -154,13 +180,6 @@ async def voice_profile_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
             "\U0001f3a4 \u0648\u06cc\u0633 \u067e\u0631\u0648\u0641\u0627\u06cc\u0644 \u0646\u062f\u0627\u0631\u06cc!\n\n\u0628\u0627 \u0627\u0636\u0627\u0641\u0647 \u06a9\u0631\u062f\u0646 \u0648\u06cc\u0633:\n\u2705 \u0627\u0645\u062a\u06cc\u0627\u0632 \u0627\u0639\u062a\u0645\u0627\u062f +5\n\u2705 \u062f\u06cc\u062f\u0647 \u0634\u062f\u0646 \u0628\u06cc\u0634\u062a\u0631\n\u2705 \u0645\u0686 \u0628\u0647\u062a\u0631",
             reply_markup=keyboard
         )
-
-async def request_voice_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "\U0001f3a4 \u06cc\u06a9 \u0648\u06cc\u0633 \u0628\u06cc\u0646 10 \u062a\u0627 30 \u062b\u0627\u0646\u06cc\u0647 \u0628\u0641\u0631\u0633\u062a:",
-        reply_markup=ReplyKeyboardRemove()
-    )
-    return VOICE_UPLOAD
 
 async def handle_voice_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     my_id = update.effective_user.id
@@ -401,14 +420,39 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
+    if query.data == "admin_users":
+        from_id = update.effective_user.id
+        if from_id not in ADMIN_IDS:
+            return
+        users = await db_get("users", "limit=10&order=id.desc")
+        text = "\U0001f465 \u0622\u062e\u0631\u06cc\u0646 \u06a9\u0627\u0631\u0628\u0631\u0627\u0646:\n\n"
+        for u in users:
+            text += f"ID: {u['telegram_id']} | {u.get('gender','')} | {u.get('city','')}\n"
+        await context.bot.send_message(chat_id=from_id, text=text)
+        return
+
+    if query.data == "admin_reports":
+        from_id = update.effective_user.id
+        if from_id not in ADMIN_IDS:
+            return
+        reports = await db_get("reports", "limit=10&order=id.desc")
+        text = "\u26a0\ufe0f \u0622\u062e\u0631\u06cc\u0646 \u06af\u0632\u0627\u0631\u0634\u200c\u0647\u0627:\n\n"
+        for r in reports:
+            text += f"\u06af\u0632\u0627\u0631\u0634\u062f\u0647\u0646\u062f\u0647: {r['reporter']} | \u06af\u0632\u0627\u0631\u0634\u0634\u062f\u0647: {r['reported']}\n"
+        await context.bot.send_message(chat_id=from_id, text=text)
+        return
+
     if query.data.startswith("vmode_"):
         mode = query.data.replace("vmode_", "")
         from_id = update.effective_user.id
         file_id = context.user_data.get("temp_voice_id")
         duration = context.user_data.get("temp_voice_duration", 0)
-        if file_id:
-            success, msg = await save_voice_profile(from_id, file_id, duration, mode, bot=context.bot)
-            await context.bot.send_message(chat_id=from_id, text=msg, reply_markup=main_menu())
+        if not file_id:
+            await context.bot.send_message(chat_id=from_id, text="\u062e\u0637\u0627! \u062f\u0648\u0628\u0627\u0631\u0647 \u0648\u06cc\u0633 \u0628\u0641\u0631\u0633\u062a\u06cc\u062f.", reply_markup=main_menu())
+            return
+        await context.bot.send_message(chat_id=from_id, text="\u062f\u0631 \u062d\u0627\u0644 \u067e\u0631\u062f\u0627\u0632\u0634 \u0648\u06cc\u0633...")
+        success, msg = await save_voice_profile(from_id, file_id, duration, mode, bot=context.bot)
+        await context.bot.send_message(chat_id=from_id, text=msg, reply_markup=main_menu())
         return
 
     if query.data == "change_voice_mode":
@@ -424,10 +468,7 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data.startswith("setmode_"):
         mode = query.data.replace("setmode_", "")
         from_id = update.effective_user.id
-        from safety import update_trust
-        trust_boost = 5 if mode == VOICE_MODE_REAL else 3 if mode == VOICE_MODE_MODIFIED else 1
         await db_patch("users", f"telegram_id=eq.{from_id}", {"voice_mode": mode})
-        await update_trust(from_id, trust_boost)
         label = get_voice_label(mode)
         await context.bot.send_message(chat_id=from_id, text=f"\u2705 \u062d\u0627\u0644\u062a \u0648\u06cc\u0633 \u062a\u063a\u06cc\u06cc\u0631 \u06a9\u0631\u062f: {label}", reply_markup=main_menu())
         return
@@ -1036,6 +1077,7 @@ def main():
         fallbacks=[CommandHandler("cancel", cancel)]
     )
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("profile", profile))
     app.add_handler(CommandHandler("browse", browse))
     app.add_handler(CommandHandler("random", random_user))
