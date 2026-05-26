@@ -1003,7 +1003,7 @@ async def browse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await deduct_coin(my_id)
     vip_badge = "⭐ VIP | " if user.get("is_vip") else ""
     voice_badge = get_voice_badge(user)
-    text = f"{voice_badge}{vip_badge}جنسیت: {user['gender']}\nسن: {user['age']}\nاستان: {user['province']}\nشهر: {user['city']}\nعلایق: {user['interests']}\nسکه باقی: {coins-1}"
+   text = f"{voice_badge}{vip_badge}جنسیت: {user['gender']}\nسن: {user['age']}\nاستان: {user['province']}\nشهر: {user['city']}\nعلایق: {user['interests']}\nسکه باقی: {coins-1}"
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("❤️ لایک", callback_data=f"like_{user['telegram_id']}"), InlineKeyboardButton("✖ بعدی", callback_data="skip")],
         [InlineKeyboardButton("💬 چت", callback_data=f"chatreq_{user['telegram_id']}"), InlineKeyboardButton("📨 پیام", callback_data=f"dm_{user['telegram_id']}")],
