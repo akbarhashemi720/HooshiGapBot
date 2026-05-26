@@ -1,1 +1,4 @@
 python-telegram-bot==20.7
+pygeohash==1.2.0
+httpx==0.24.1
+supabase==1.0.4
