@@ -3,19 +3,6 @@ from telegram.ext import Application, CommandHandler, ContextTypes, Conversation
 import httpx
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
-
-class Handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"OK")
-    def log_message(self, *args):
-        pass
-
-def run_server():
-    HTTPServer(("0.0.0.0", 10000), Handler).serve_forever()
-
-threading.Thread(target=run_server, daemon=True).start()
 import random
 import math
 from safety import (
@@ -37,6 +24,19 @@ from voice import (
     VOICE_MODE_REAL, VOICE_MODE_MODIFIED, VOICE_MODE_HIDDEN
 )
 
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
+    def log_message(self, *args):
+        pass
+
+def run_server():
+    HTTPServer(("0.0.0.0", 10000), Handler).serve_forever()
+
+threading.Thread(target=run_server, daemon=True).start()
+
 SUPABASE_URL = "https://ahjdziimhlpynvvwhgiz.supabase.co"
 SUPABASE_KEY = "sb_publishable_DBlfUH3YcVEsCJ2m-3tOWg_nJNMBh5R"
 BOT_USERNAME = "HooshiGapBot"
@@ -50,22 +50,28 @@ RECENT_GENDER = 13
 DM_WRITE = 14
 VOICE_UPLOAD = 15
 VOICE_MODE_SELECT = 16
+ADMIN_BAN_ID = 17
+ADMIN_UNBAN_ID = 18
+ADMIN_COINS_ID = 19
+ADMIN_COINS_AMOUNT = 20
+ADMIN_BROADCAST_MSG = 21
+ADMIN_DETAIL_ID = 22
 
 active_chats = {}
 
 def main_menu():
     keyboard = [
-        ["\U0001f465 \u0645\u0631\u0648\u0631 \u067e\u0631\u0648\u0641\u0627\u06cc\u0644\u200c\u0647\u0627", "\U0001f50d \u062c\u0633\u062a\u062c\u0648\u06cc \u067e\u06cc\u0634\u0631\u0641\u062a\u0647"],
-        ["\U0001f3b2 \u0627\u062a\u0635\u0627\u0644 \u062a\u0635\u0627\u062f\u0641\u06cc", "\U0001f464 \u067e\u0631\u0648\u0641\u0627\u06cc\u0644 \u0645\u0646"],
-        ["\U0001f4b0 \u06a9\u06cc\u0641 \u067e\u0648\u0644", "\U0001f381 \u062f\u0639\u0648\u062a \u062f\u0648\u0633\u062a\u0627\u0646"],
-        ["\u270f\ufe0f \u0648\u06cc\u0631\u0627\u06cc\u0634 \u067e\u0631\u0648\u0641\u0627\u06cc\u0644", "\U0001f382 \u0647\u0645\u200c\u0633\u0646\u200c\u0647\u0627\u06cc \u0645\u0646"],
-        ["\U0001f4cd \u0627\u0641\u0631\u0627\u062f \u0646\u0632\u062f\u06cc\u06a9", "\U0001f4ac \u0686\u062a\u200c\u0647\u0627\u06cc \u0627\u062e\u06cc\u0631"],
-        ["\U0001f3a4 \u0648\u06cc\u0633 \u067e\u0631\u0648\u0641\u0627\u06cc\u0644"]
+        ["👥 مرور پروفایل‌ها", "🔍 جستجوی پیشرفته"],
+        ["🎲 اتصال تصادفی", "👤 پروفایل من"],
+        ["💰 کیف پول", "🎁 دعوت دوستان"],
+        ["✏️ ویرایش پروفایل", "🎂 هم‌سن‌های من"],
+        ["📍 افراد نزدیک", "💬 چت‌های اخیر"],
+        ["🎤 ویس پروفایل"]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def chat_menu():
-    keyboard = [["\u26d4 \u067e\u0627\u06cc\u0627\u0646 \u062f\u0627\u062f\u0646 \u0686\u062a"]]
+    keyboard = [["⛔ پایان دادن چت"]]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def distance_km(lat1, lon1, lat2, lon2):
@@ -130,7 +136,7 @@ async def save_chat_history(user1, user2):
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     my_id = update.effective_user.id
     if my_id not in ADMIN_IDS:
-        await update.message.reply_text("\u062f\u0633\u062a\u0631\u0633\u06cc \u0646\u062f\u0627\u0631\u06cc\u062f!")
+        await update.message.reply_text("دسترسی ندارید!")
         return
     total = len(await db_get("users", ""))
     vip_count = len(await db_get("users", "is_vip=eq.true"))
@@ -138,19 +144,143 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reports = len(await db_get("reports", ""))
     blocks = len(await db_get("blocks", ""))
     text = (
-        f"\U0001f4ca \u067e\u0646\u0644 \u0627\u062f\u0645\u06cc\u0646\n"
-        f"\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n"
-        f"\U0001f465 \u06a9\u0644 \u06a9\u0627\u0631\u0628\u0631\u0627\u0646: {total}\n"
-        f"\u2b50 \u06a9\u0627\u0631\u0628\u0631\u0627\u0646 VIP: {vip_count}\n"
-        f"\U0001f3a4 \u062f\u0627\u0631\u0627\u06cc \u0648\u06cc\u0633: {voice_count}\n"
-        f"\u26a0\ufe0f \u06af\u0632\u0627\u0631\u0634\u200c\u0647\u0627: {reports}\n"
-        f"\u26d4 \u0628\u0644\u0627\u06a9\u200c\u0647\u0627: {blocks}\n"
+        f"📊 پنل ادمین\n"
+        f"━━━━━━━━\n"
+        f"👥 کل کاربران: {total}\n"
+        f"⭐ کاربران VIP: {vip_count}\n"
+        f"🎤 دارای ویس: {voice_count}\n"
+        f"⚠️ گزارش‌ها: {reports}\n"
+        f"⛔ بلاک‌ها: {blocks}\n"
     )
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("\U0001f465 \u0644\u06cc\u0633\u062a \u06a9\u0627\u0631\u0628\u0631\u0627\u0646", callback_data="admin_users")],
-        [InlineKeyboardButton("\u26a0\ufe0f \u06af\u0632\u0627\u0631\u0634\u200c\u0647\u0627", callback_data="admin_reports")],
+        [InlineKeyboardButton("👥 لیست کاربران", callback_data="admin_users")],
+        [InlineKeyboardButton("⚠️ گزارش‌ها", callback_data="admin_reports")],
+        [InlineKeyboardButton("🚫 بن کاربر", callback_data="admin_ban")],
+        [InlineKeyboardButton("✅ آنبن کاربر", callback_data="admin_unban")],
+        [InlineKeyboardButton("💰 اضافه کردن سکه", callback_data="admin_coins")],
+        [InlineKeyboardButton("📢 پیام به همه", callback_data="admin_broadcast")],
+        [InlineKeyboardButton("🔍 جزئیات کاربر", callback_data="admin_detail")],
     ])
     await update.message.reply_text(text, reply_markup=keyboard)
+
+async def admin_ban_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    my_id = update.effective_user.id
+    if my_id not in ADMIN_IDS:
+        return ConversationHandler.END
+    user_id = update.message.text.strip()
+    try:
+        user_id = int(user_id)
+    except:
+        await update.message.reply_text("آیدی نامعتبر!", reply_markup=main_menu())
+        return ConversationHandler.END
+    await db_patch("users", f"telegram_id=eq.{user_id}", {"is_banned": True, "shadowban_level": 3})
+    await update.message.reply_text(f"✅ کاربر {user_id} بن شد!", reply_markup=main_menu())
+    try:
+        await context.bot.send_message(chat_id=user_id, text="⛔ حساب شما توسط ادمین مسدود شده است.")
+    except:
+        pass
+    return ConversationHandler.END
+
+async def admin_unban_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    my_id = update.effective_user.id
+    if my_id not in ADMIN_IDS:
+        return ConversationHandler.END
+    user_id = update.message.text.strip()
+    try:
+        user_id = int(user_id)
+    except:
+        await update.message.reply_text("آیدی نامعتبر!", reply_markup=main_menu())
+        return ConversationHandler.END
+    await db_patch("users", f"telegram_id=eq.{user_id}", {"is_banned": False, "shadowban_level": 0})
+    await update.message.reply_text(f"✅ کاربر {user_id} آنبن شد!", reply_markup=main_menu())
+    try:
+        await context.bot.send_message(chat_id=user_id, text="✅ حساب شما رفع مسدودیت شد.")
+    except:
+        pass
+    return ConversationHandler.END
+
+async def admin_coins_id_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    my_id = update.effective_user.id
+    if my_id not in ADMIN_IDS:
+        return ConversationHandler.END
+    user_id = update.message.text.strip()
+    try:
+        context.user_data["admin_coins_target"] = int(user_id)
+    except:
+        await update.message.reply_text("آیدی نامعتبر!", reply_markup=main_menu())
+        return ConversationHandler.END
+    await update.message.reply_text("چند سکه اضافه کنم؟")
+    return ADMIN_COINS_AMOUNT
+
+async def admin_coins_amount_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    my_id = update.effective_user.id
+    if my_id not in ADMIN_IDS:
+        return ConversationHandler.END
+    try:
+        amount = int(update.message.text.strip())
+    except:
+        await update.message.reply_text("عدد نامعتبر!", reply_markup=main_menu())
+        return ConversationHandler.END
+    target_id = context.user_data.get("admin_coins_target")
+    await add_coins(target_id, amount)
+    await update.message.reply_text(f"✅ {amount} سکه به کاربر {target_id} اضافه شد!", reply_markup=main_menu())
+    try:
+        await context.bot.send_message(chat_id=target_id, text=f"💰 {amount} سکه توسط ادمین به حساب شما اضافه شد!")
+    except:
+        pass
+    return ConversationHandler.END
+
+async def admin_broadcast_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    my_id = update.effective_user.id
+    if my_id not in ADMIN_IDS:
+        return ConversationHandler.END
+    msg = update.message.text
+    users = await db_get("users", "select=telegram_id")
+    sent = 0
+    failed = 0
+    for u in users:
+        try:
+            await context.bot.send_message(chat_id=u["telegram_id"], text=f"📢 پیام از ادمین:\n\n{msg}")
+            sent += 1
+        except:
+            failed += 1
+    await update.message.reply_text(f"✅ پیام ارسال شد!\nموفق: {sent}\nناموفق: {failed}", reply_markup=main_menu())
+    return ConversationHandler.END
+
+async def admin_detail_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    my_id = update.effective_user.id
+    if my_id not in ADMIN_IDS:
+        return ConversationHandler.END
+    user_id = update.message.text.strip()
+    try:
+        user_id = int(user_id)
+    except:
+        await update.message.reply_text("آیدی نامعتبر!", reply_markup=main_menu())
+        return ConversationHandler.END
+    users = await db_get("users", f"telegram_id=eq.{user_id}")
+    if not users:
+        await update.message.reply_text("کاربر پیدا نشد!", reply_markup=main_menu())
+        return ConversationHandler.END
+    u = users[0]
+    coins = await get_coins(user_id)
+    trust = await get_trust(user_id)
+    text = (
+        f"🔍 جزئیات کاربر:\n"
+        f"━━━━━━━━\n"
+        f"آیدی: {u['telegram_id']}\n"
+        f"جنسیت: {u.get('gender', '-')}\n"
+        f"سن: {u.get('age', '-')}\n"
+        f"استان: {u.get('province', '-')}\n"
+        f"شهر: {u.get('city', '-')}\n"
+        f"علایق: {u.get('interests', '-')}\n"
+        f"سکه: {coins}\n"
+        f"VIP: {'✅' if u.get('is_vip') else '❌'}\n"
+        f"بن: {'✅' if u.get('is_banned') else '❌'}\n"
+        f"امتیاز اعتماد: {trust.get('trust_score', 50)}\n"
+        f"shadowban: {u.get('shadowban_level', 0)}\n"
+    )
+    await update.message.reply_text(text, reply_markup=main_menu())
+    return ConversationHandler.END
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     my_id = update.effective_user.id
@@ -162,14 +292,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not existing:
                 await add_coins(referrer_id, 5)
                 try:
-                    await context.bot.send_message(chat_id=referrer_id, text="\u06cc\u06a9 \u0646\u0641\u0631 \u062c\u062f\u06cc\u062f \u0648\u0627\u0631\u062f \u0634\u062f! 5 \u0633\u06a9\u0647 \u06af\u0631\u0641\u062a\u06cc\u062f!")
+                    await context.bot.send_message(chat_id=referrer_id, text="یک نفر جدید وارد شد! 5 سکه گرفتید!")
                 except:
                     pass
     existing = await db_get("users", f"telegram_id=eq.{my_id}")
     if existing:
-        await update.message.reply_text("\u062e\u0648\u0634 \u0628\u0631\u06af\u0634\u062a\u06cc \u0628\u0647 \u0647\u0648\u0634\u06cc \u06af\u067e!", reply_markup=main_menu())
+        await update.message.reply_text("خوش برگشتی به هوشی گپ!", reply_markup=main_menu())
     else:
-        await update.message.reply_text("\u0633\u0644\u0627\u0645! \u0628\u0647 \u0647\u0648\u0634\u06cc \u06af\u067e \u062e\u0648\u0634 \u0627\u0648\u0645\u062f\u06cc!\n/register \u0628\u0632\u0646", reply_markup=ReplyKeyboardRemove())
+        await update.message.reply_text("سلام! به هوشی گپ خوش اومدی!\n/register بزن", reply_markup=ReplyKeyboardRemove())
 
 async def voice_profile_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     my_id = update.effective_user.id
@@ -178,39 +308,39 @@ async def voice_profile_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
         mode = voice.get("voice_mode", VOICE_MODE_REAL)
         label = get_voice_label(mode)
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("\U0001f3a4 \u067e\u062e\u0634 \u0648\u06cc\u0633", callback_data="play_my_voice")],
-            [InlineKeyboardButton("\u267b\ufe0f \u062c\u0627\u06cc\u06af\u0632\u06cc\u0646\u06cc \u0648\u06cc\u0633", callback_data="replace_voice")],
-            [InlineKeyboardButton("\U0001f512 \u062a\u063a\u06cc\u06cc\u0631 \u062d\u0631\u06cc\u0645 \u062e\u0635\u0648\u0635\u06cc", callback_data="change_voice_mode")],
-            [InlineKeyboardButton("\u274c \u062d\u0630\u0641 \u0648\u06cc\u0633", callback_data="delete_voice")]
+            [InlineKeyboardButton("🎤 پخش ویس", callback_data="play_my_voice")],
+            [InlineKeyboardButton("♻️ جایگزینی ویس", callback_data="replace_voice")],
+            [InlineKeyboardButton("🔒 تغییر حریم خصوصی", callback_data="change_voice_mode")],
+            [InlineKeyboardButton("❌ حذف ویس", callback_data="delete_voice")]
         ])
         await update.message.reply_text(
-            f"\U0001f3a4 \u0648\u06cc\u0633 \u067e\u0631\u0648\u0641\u0627\u06cc\u0644 \u0641\u0639\u0627\u0644\u0647!\n\u0645\u062f\u062a: {voice.get('voice_duration', 0)} \u062b\u0627\u0646\u06cc\u0647\n\u062d\u0627\u0644\u062a: {label}",
+            f"🎤 ویس پروفایل فعاله!\nمدت: {voice.get('voice_duration', 0)} ثانیه\nحالت: {label}",
             reply_markup=keyboard
         )
     else:
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("\U0001f3a4 \u0627\u0636\u0627\u0641\u0647 \u06a9\u0631\u062f\u0646 \u0648\u06cc\u0633 \u067e\u0631\u0648\u0641\u0627\u06cc\u0644", callback_data="add_voice")]
+            [InlineKeyboardButton("🎤 اضافه کردن ویس پروفایل", callback_data="add_voice")]
         ])
         await update.message.reply_text(
-            "\U0001f3a4 \u0648\u06cc\u0633 \u067e\u0631\u0648\u0641\u0627\u06cc\u0644 \u0646\u062f\u0627\u0631\u06cc!\n\n\u0628\u0627 \u0627\u0636\u0627\u0641\u0647 \u06a9\u0631\u062f\u0646 \u0648\u06cc\u0633:\n\u2705 \u0627\u0645\u062a\u06cc\u0627\u0632 \u0627\u0639\u062a\u0645\u0627\u062f +5\n\u2705 \u062f\u06cc\u062f\u0647 \u0634\u062f\u0646 \u0628\u06cc\u0634\u062a\u0631\n\u2705 \u0645\u0686 \u0628\u0647\u062a\u0631",
+            "🎤 ویس پروفایل نداری!\n\nبا اضافه کردن ویس:\n✅ امتیاز اعتماد +5\n✅ دیده شدن بیشتر\n✅ مچ بهتر",
             reply_markup=keyboard
         )
 
 async def handle_voice_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     my_id = update.effective_user.id
     if not update.message.voice:
-        await update.message.reply_text("\u0644\u0637\u0641\u0627 \u0648\u06cc\u0633 \u0628\u0641\u0631\u0633\u062a\u06cc\u062f!", reply_markup=main_menu())
+        await update.message.reply_text("لطفا ویس بفرستید!", reply_markup=main_menu())
         return ConversationHandler.END
     voice = update.message.voice
     context.user_data["temp_voice_id"] = voice.file_id
     context.user_data["temp_voice_duration"] = voice.duration
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("\U0001f3a4 \u0648\u06cc\u0633 \u0648\u0627\u0642\u0639\u06cc", callback_data="vmode_real")],
-        [InlineKeyboardButton("\U0001f527 \u0648\u06cc\u0633 \u062a\u063a\u06cc\u06cc\u0631\u06cc\u0627\u0641\u062a\u0647", callback_data="vmode_modified")],
-        [InlineKeyboardButton("\U0001f512 \u067e\u0646\u0647\u0627\u0646 \u062a\u0627 \u0645\u0686", callback_data="vmode_hidden")]
+        [InlineKeyboardButton("🎤 ویس واقعی", callback_data="vmode_real")],
+        [InlineKeyboardButton("🔧 ویس تغییریافته", callback_data="vmode_modified")],
+        [InlineKeyboardButton("🔒 پنهان تا مچ", callback_data="vmode_hidden")]
     ])
     await update.message.reply_text(
-        "\u0648\u06cc\u0633\u062a \u062f\u0631\u06cc\u0627\u0641\u062a \u0634\u062f!\n\u0686\u0637\u0648\u0631 \u0646\u0645\u0627\u06cc\u0634 \u062f\u0627\u062f\u0647 \u0628\u0634\u0647\u061f",
+        "ویست دریافت شد!\nچطور نمایش داده بشه؟",
         reply_markup=keyboard
     )
     return ConversationHandler.END
@@ -218,16 +348,16 @@ async def handle_voice_upload(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def send_dm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     to_id = context.user_data.get("dm_to")
     if not to_id:
-        await update.message.reply_text("\u062e\u0637\u0627\u06cc \u0641\u0646\u06cc!", reply_markup=main_menu())
+        await update.message.reply_text("خطای فنی!", reply_markup=main_menu())
         return ConversationHandler.END
     from_id = update.effective_user.id
     message_text = update.message.text
     if not check_rate_limit(from_id):
-        await update.message.reply_text("\u067e\u06cc\u0627\u0645 \u0647\u0627 \u0631\u0648 \u06a9\u0645\u062a\u0631 \u0628\u0641\u0631\u0633\u062a\u06cc\u062f!")
+        await update.message.reply_text("پیام ها رو کمتر بفرستید!")
         return ConversationHandler.END
     result_analysis = await analyze_message(from_id, message_text)
     if result_analysis == "toxic":
-        await update.message.reply_text("\u067e\u06cc\u0627\u0645 \u0634\u0645\u0627 \u0646\u0627\u0645\u0646\u0627\u0633\u0628 \u0628\u0648\u062f \u0648 \u0627\u0631\u0633\u0627\u0644 \u0646\u0634\u062f!", reply_markup=main_menu())
+        await update.message.reply_text("پیام شما نامناسب بود و ارسال نشد!", reply_markup=main_menu())
         return ConversationHandler.END
     from_coins = await get_coins(from_id)
     if from_coins >= 1:
@@ -245,24 +375,24 @@ async def send_dm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from_profile = await db_get("users", f"telegram_id=eq.{from_id}")
     if from_profile:
         u = from_profile[0]
-        vip_badge = "\u2b50 VIP | " if u.get("is_vip") else ""
+        vip_badge = "⭐ VIP | " if u.get("is_vip") else ""
         voice_badge = get_voice_badge(u)
         if is_paid:
             notif = (
-                f"\U0001f4e8 \u067e\u06cc\u0627\u0645 \u062e\u0635\u0648\u0635\u06cc \u062c\u062f\u06cc\u062f!\n"
-                f"{voice_badge}{vip_badge}\u062c\u0646\u0633\u06cc\u062a: {u['gender']} | \u0633\u0646: {u['age']} | \u0634\u0647\u0631: {u['city']}\n\n"
-                f"\u0628\u0631\u0627\u06cc \u062e\u0648\u0627\u0646\u062f\u0646 \u067e\u06cc\u0627\u0645 \u0631\u0648\u06cc \u062f\u06a9\u0645\u0647 \u0632\u06cc\u0631 \u0628\u0632\u0646\u06cc\u062f:"
+                f"📨 پیام خصوصی جدید!\n"
+                f"{voice_badge}{vip_badge}جنسیت: {u['gender']} | سن: {u['age']} | شهر: {u['city']}\n\n"
+                f"برای خواندن پیام روی دکمه زیر بزنید:"
             )
         else:
             notif = (
-                f"\U0001f4e8 \u067e\u06cc\u0627\u0645 \u062e\u0635\u0648\u0635\u06cc \u062c\u062f\u06cc\u062f!\n"
-                f"{voice_badge}{vip_badge}\u062c\u0646\u0633\u06cc\u062a: {u['gender']} | \u0633\u0646: {u['age']} | \u0634\u0647\u0631: {u['city']}\n\n"
-                f"\u26a0\ufe0f \u0641\u0631\u0633\u062a\u0646\u062f\u0647 \u0633\u06a9\u0647 \u06a9\u0627\u0641\u06cc \u0646\u062f\u0627\u0634\u062a!\n"
-                f"\u0628\u0631\u0627\u06cc \u062e\u0648\u0627\u0646\u062f\u0646 \u067e\u06cc\u0627\u0645\u060c 1 \u0633\u06a9\u0647 \u0627\u0632 \u0634\u0645\u0627 \u06a9\u0633\u0631 \u0645\u06cc\u0634\u0648\u062f:"
+                f"📨 پیام خصوصی جدید!\n"
+                f"{voice_badge}{vip_badge}جنسیت: {u['gender']} | سن: {u['age']} | شهر: {u['city']}\n\n"
+                f"⚠️ فرستنده سکه کافی نداشت!\n"
+                f"برای خواندن پیام، 1 سکه از شما کسر میشود:"
             )
         if msg_id:
             kb = InlineKeyboardMarkup([[
-                InlineKeyboardButton("\U0001f4e9 \u062e\u0648\u0627\u0646\u062f\u0646 \u067e\u06cc\u0627\u0645", callback_data=f"readdm_{msg_id}_{from_id}_{is_paid}")
+                InlineKeyboardButton("📩 خواندن پیام", callback_data=f"readdm_{msg_id}_{from_id}_{is_paid}")
             ]])
             try:
                 if u.get("photo_id"):
@@ -271,27 +401,27 @@ async def send_dm(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await context.bot.send_message(chat_id=to_id, text=notif, reply_markup=kb)
             except:
                 pass
-    await update.message.reply_text("\u2705 \u067e\u06cc\u0627\u0645 \u0627\u0631\u0633\u0627\u0644 \u0634\u062f!", reply_markup=main_menu())
+    await update.message.reply_text("✅ پیام ارسال شد!", reply_markup=main_menu())
     return ConversationHandler.END
 
 async def coins_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     my_id = update.effective_user.id
     coins = await get_coins(my_id)
     vip = await is_vip(my_id)
-    vip_text = "\u2b50 VIP \u0641\u0639\u0627\u0644" if vip else "VIP \u0646\u062f\u0627\u0631\u06cc\u062f"
+    vip_text = "⭐ VIP فعال" if vip else "VIP ندارید"
     text = (
-        f"\U0001f4b0 \u06a9\u06cc\u0641 \u067e\u0648\u0644 \u0634\u0645\u0627\n"
-        f"\u0633\u06a9\u0647: {coins} \u0639\u062f\u062f\n"
-        f"\u0648\u0636\u0639\u06cc\u062a: {vip_text}\n\n"
-        f"\u0631\u0648\u0634\u200c\u0647\u0627\u06cc \u062f\u0631\u06cc\u0627\u0641\u062a \u0633\u06a9\u0647:\n\n"
-        f"1 - \u0645\u0639\u0631\u0641\u06cc \u062f\u0648\u0633\u062a\u0627\u0646 - \u0631\u0627\u06cc\u06af\u0627\u0646\n"
-        f"2 - \u062e\u0631\u06cc\u062f \u0633\u06a9\u0647 - \u0628\u0647 \u0632\u0648\u062f\u06cc\n"
-        f"3 - \u062e\u0631\u06cc\u062f VIP - \u0627\u0645\u06a9\u0627\u0646\u0627\u062a \u0648\u06cc\u0698\u0647"
+        f"💰 کیف پول شما\n"
+        f"سکه: {coins} عدد\n"
+        f"وضعیت: {vip_text}\n\n"
+        f"روش‌های دریافت سکه:\n\n"
+        f"1 - معرفی دوستان - رایگان\n"
+        f"2 - خرید سکه - به زودی\n"
+        f"3 - خرید VIP - امکانات ویژه"
     )
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("\U0001f381 \u0645\u0639\u0631\u0641\u06cc \u062f\u0648\u0633\u062a\u0627\u0646 (\u0631\u0627\u06cc\u06af\u0627\u0646)", callback_data="coins_invite")],
-        [InlineKeyboardButton("\U0001f4b3 \u062e\u0631\u06cc\u062f \u0633\u06a9\u0647 (\u0628\u0647 \u0632\u0648\u062f\u06cc)", callback_data="coins_buy")],
-        [InlineKeyboardButton("\u2b50 \u062e\u0631\u06cc\u062f VIP (\u0628\u0647 \u0632\u0648\u062f\u06cc)", callback_data="coins_vip")]
+        [InlineKeyboardButton("🎁 معرفی دوستان (رایگان)", callback_data="coins_invite")],
+        [InlineKeyboardButton("💳 خرید سکه (به زودی)", callback_data="coins_buy")],
+        [InlineKeyboardButton("⭐ خرید VIP (به زودی)", callback_data="coins_vip")]
     ])
     await update.message.reply_text(text, reply_markup=keyboard)
 
@@ -307,13 +437,13 @@ async def end_chat_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         del active_chats[my_id]
         if partner_id in active_chats:
             del active_chats[partner_id]
-        await update.message.reply_text("\u0686\u062a \u067e\u0627\u06cc\u0627\u0646 \u06cc\u0627\u0641\u062a!", reply_markup=main_menu())
+        await update.message.reply_text("چت پایان یافت!", reply_markup=main_menu())
         try:
-            await context.bot.send_message(chat_id=partner_id, text="\u0637\u0631\u0641 \u0645\u0642\u0627\u0628\u0644 \u0686\u062a \u0631\u0627 \u067e\u0627\u06cc\u0627\u0646 \u062f\u0627\u062f.", reply_markup=main_menu())
+            await context.bot.send_message(chat_id=partner_id, text="طرف مقابل چت را پایان داد.", reply_markup=main_menu())
         except:
             pass
     else:
-        await update.message.reply_text("\u0686\u062a \u0641\u0639\u0627\u0644\u06cc \u0646\u062f\u0627\u0631\u06cc!", reply_markup=main_menu())
+        await update.message.reply_text("چت فعالی نداری!", reply_markup=main_menu())
 
 async def forward_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
     my_id = update.effective_user.id
@@ -344,8 +474,8 @@ async def forward_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass
 
 async def recent_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [["\u067e\u0633\u0631", "\u062f\u062e\u062a\u0631", "\u0647\u0645\u0647"]]
-    await update.message.reply_text("\u0686\u062a\u200c\u0647\u0627\u06cc \u0627\u062e\u06cc\u0631 \u0628\u0627 \u0686\u0647 \u062c\u0646\u0633\u06cc\u062a\u06cc\u061f", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
+    keyboard = [["پسر", "دختر", "همه"]]
+    await update.message.reply_text("چت‌های اخیر با چه جنسیتی؟", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
     return RECENT_GENDER
 
 async def recent_gender(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -355,25 +485,25 @@ async def recent_gender(update: Update, context: ContextTypes.DEFAULT_TYPE):
     history2 = await db_get("chat_history", f"user2=eq.{my_id}")
     partner_ids = [h["user2"] for h in history1] + [h["user1"] for h in history2]
     if not partner_ids:
-        await update.message.reply_text("\u0647\u0646\u0648\u0632 \u0686\u062a\u06cc \u0646\u062f\u0627\u0634\u062a\u06cc!", reply_markup=main_menu())
+        await update.message.reply_text("هنوز چتی نداشتی!", reply_markup=main_menu())
         return ConversationHandler.END
     found = []
     for pid in partner_ids:
         users = await db_get("users", f"telegram_id=eq.{pid}")
         if users:
             u = users[0]
-            if gender_filter == "\u0647\u0645\u0647" or u.get("gender") == gender_filter:
+            if gender_filter == "همه" or u.get("gender") == gender_filter:
                 found.append(u)
     if not found:
-        await update.message.reply_text("\u06a9\u0633\u06cc \u067e\u06cc\u062f\u0627 \u0646\u0634\u062f!", reply_markup=main_menu())
+        await update.message.reply_text("کسی پیدا نشد!", reply_markup=main_menu())
         return ConversationHandler.END
-    await update.message.reply_text(f"{len(found)} \u0646\u0641\u0631 \u067e\u06cc\u062f\u0627 \u0634\u062f:", reply_markup=main_menu())
+    await update.message.reply_text(f"{len(found)} نفر پیدا شد:", reply_markup=main_menu())
     for user in found[:10]:
-        vip_badge = "\u2b50 VIP | " if user.get("is_vip") else ""
+        vip_badge = "⭐ VIP | " if user.get("is_vip") else ""
         voice_badge = get_voice_badge(user)
-        text = f"{voice_badge}{vip_badge}\u062c\u0646\u0633\u06cc\u062a: {user['gender']}\n\u0633\u0646: {user['age']}\n\u0634\u0647\u0631: {user['city']}\n\u0639\u0644\u0627\u06cc\u0642: {user['interests']}"
+        text = f"{voice_badge}{vip_badge}جنسیت: {user['gender']}\nسن: {user['age']}\nشهر: {user['city']}\nعلایق: {user['interests']}"
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("\U0001f4ac \u0686\u062a", callback_data=f"chatreq_{user['telegram_id']}"), InlineKeyboardButton("\u2764\ufe0f \u0644\u0627\u06cc\u06a9", callback_data=f"like_{user['telegram_id']}")]
+            [InlineKeyboardButton("💬 چت", callback_data=f"chatreq_{user['telegram_id']}"), InlineKeyboardButton("❤️ لایک", callback_data=f"like_{user['telegram_id']}")]
         ])
         if user.get("photo_id"):
             await update.message.reply_photo(photo=user["photo_id"], caption=text, reply_markup=keyboard)
@@ -385,18 +515,18 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     my_id = update.effective_user.id
 
-    if "\u067e\u0627\u06cc\u0627\u0646 \u062f\u0627\u062f\u0646 \u0686\u062a" in text:
+    if "پایان دادن چت" in text:
         await end_chat_cmd(update, context)
         return
 
     if my_id in active_chats:
         partner_id = active_chats[my_id]
         if not check_rate_limit(my_id):
-            await update.message.reply_text("\u067e\u06cc\u0627\u0645 \u0647\u0627 \u0631\u0648 \u06a9\u0645\u062a\u0631 \u0628\u0641\u0631\u0633\u062a\u06cc\u062f!")
+            await update.message.reply_text("پیام ها رو کمتر بفرستید!")
             return
         result = await analyze_message(my_id, text)
         if result == "toxic":
-            await update.message.reply_text("\u067e\u06cc\u0627\u0645 \u0646\u0627\u0645\u0646\u0627\u0633\u0628 \u0627\u0631\u0633\u0627\u0644 \u0646\u0634\u062f!")
+            await update.message.reply_text("پیام نامناسب ارسال نشد!")
             return
         try:
             await context.bot.send_message(chat_id=partner_id, text=text)
@@ -404,31 +534,31 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
         return
 
-    if "\u0645\u0631\u0648\u0631 \u067e\u0631\u0648\u0641\u0627\u06cc\u0644" in text:
+    if "مرور پروفایل" in text:
         await browse(update, context)
-    elif "\u062c\u0633\u062a\u062c\u0648" in text:
+    elif "جستجو" in text:
         await search(update, context)
         return SEARCH_GENDER
-    elif "\u0627\u062a\u0635\u0627\u0644 \u062a\u0635\u0627\u062f\u0641\u06cc" in text:
+    elif "اتصال تصادفی" in text:
         await random_user(update, context)
-    elif "\u067e\u0631\u0648\u0641\u0627\u06cc\u0644 \u0645\u0646" in text:
+    elif "پروفایل من" in text:
         await profile(update, context)
-    elif "\u06a9\u06cc\u0641 \u067e\u0648\u0644" in text:
+    elif "کیف پول" in text:
         await coins_cmd(update, context)
-    elif "\u062f\u0639\u0648\u062a" in text:
+    elif "دعوت" in text:
         await invite(update, context)
-    elif "\u0648\u06cc\u0631\u0627\u06cc\u0634" in text:
+    elif "ویرایش" in text:
         await edit_profile(update, context)
         return EDIT_CHOICE
-    elif "\u0647\u0645\u200c\u0633\u0646" in text:
+    elif "هم‌سن" in text:
         await same_age(update, context)
-    elif "\u0646\u0632\u062f\u06cc\u06a9" in text:
+    elif "نزدیک" in text:
         await nearby(update, context)
         return NEARBY_DISTANCE
-    elif "\u0686\u062a\u200c\u0647\u0627\u06cc \u0627\u062e\u06cc\u0631" in text:
+    elif "چت‌های اخیر" in text:
         await recent_chats(update, context)
         return RECENT_GENDER
-    elif "\u0648\u06cc\u0633 \u067e\u0631\u0648\u0641\u0627\u06cc\u0644" in text:
+    elif "ویس پروفایل" in text:
         await voice_profile_menu(update, context)
 
 async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -440,7 +570,7 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if from_id not in ADMIN_IDS:
             return
         users = await db_get("users", "limit=10&order=id.desc")
-        text = "\U0001f465 \u0622\u062e\u0631\u06cc\u0646 \u06a9\u0627\u0631\u0628\u0631\u0627\u0646:\n\n"
+        text = "👥 آخرین کاربران:\n\n"
         for u in users:
             text += f"ID: {u['telegram_id']} | {u.get('gender','')} | {u.get('city','')}\n"
         await context.bot.send_message(chat_id=from_id, text=text)
@@ -451,10 +581,50 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if from_id not in ADMIN_IDS:
             return
         reports = await db_get("reports", "limit=10&order=id.desc")
-        text = "\u26a0\ufe0f \u0622\u062e\u0631\u06cc\u0646 \u06af\u0632\u0627\u0631\u0634\u200c\u0647\u0627:\n\n"
+        text = "⚠️ آخرین گزارش‌ها:\n\n"
         for r in reports:
-            text += f"\u06af\u0632\u0627\u0631\u0634\u062f\u0647\u0646\u062f\u0647: {r['reporter']} | \u06af\u0632\u0627\u0631\u0634\u0634\u062f\u0647: {r['reported']}\n"
+            text += f"گزارش‌دهنده: {r['reporter']} | گزارش‌شده: {r['reported']}\n"
         await context.bot.send_message(chat_id=from_id, text=text)
+        return
+
+    if query.data == "admin_ban":
+        from_id = update.effective_user.id
+        if from_id not in ADMIN_IDS:
+            return
+        await context.bot.send_message(chat_id=from_id, text="آیدی عددی کاربری که میخوای بن کنی رو بفرست:")
+        context.user_data["admin_action"] = "ban"
+        return
+
+    if query.data == "admin_unban":
+        from_id = update.effective_user.id
+        if from_id not in ADMIN_IDS:
+            return
+        await context.bot.send_message(chat_id=from_id, text="آیدی عددی کاربری که میخوای آنبن کنی رو بفرست:")
+        context.user_data["admin_action"] = "unban"
+        return
+
+    if query.data == "admin_coins":
+        from_id = update.effective_user.id
+        if from_id not in ADMIN_IDS:
+            return
+        await context.bot.send_message(chat_id=from_id, text="آیدی عددی کاربری که میخوای سکه بدی رو بفرست:")
+        context.user_data["admin_action"] = "coins"
+        return
+
+    if query.data == "admin_broadcast":
+        from_id = update.effective_user.id
+        if from_id not in ADMIN_IDS:
+            return
+        await context.bot.send_message(chat_id=from_id, text="پیامی که میخوای به همه بفرستی رو بنویس:")
+        context.user_data["admin_action"] = "broadcast"
+        return
+
+    if query.data == "admin_detail":
+        from_id = update.effective_user.id
+        if from_id not in ADMIN_IDS:
+            return
+        await context.bot.send_message(chat_id=from_id, text="آیدی عددی کاربر مورد نظر رو بفرست:")
+        context.user_data["admin_action"] = "detail"
         return
 
     if query.data.startswith("vmode_"):
@@ -463,9 +633,9 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file_id = context.user_data.get("temp_voice_id")
         duration = context.user_data.get("temp_voice_duration", 0)
         if not file_id:
-            await context.bot.send_message(chat_id=from_id, text="\u062e\u0637\u0627! \u062f\u0648\u0628\u0627\u0631\u0647 \u0648\u06cc\u0633 \u0628\u0641\u0631\u0633\u062a\u06cc\u062f.", reply_markup=main_menu())
+            await context.bot.send_message(chat_id=from_id, text="خطا! دوباره ویس بفرستید.", reply_markup=main_menu())
             return
-        await context.bot.send_message(chat_id=from_id, text="\u062f\u0631 \u062d\u0627\u0644 \u067e\u0631\u062f\u0627\u0632\u0634 \u0648\u06cc\u0633...")
+        await context.bot.send_message(chat_id=from_id, text="در حال پردازش ویس...")
         success, msg = await save_voice_profile(from_id, file_id, duration, mode, bot=context.bot)
         await context.bot.send_message(chat_id=from_id, text=msg, reply_markup=main_menu())
         return
@@ -473,11 +643,11 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data == "change_voice_mode":
         from_id = update.effective_user.id
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("\U0001f3a4 \u0648\u06cc\u0633 \u0648\u0627\u0642\u0639\u06cc", callback_data="setmode_real")],
-            [InlineKeyboardButton("\U0001f527 \u0648\u06cc\u0633 \u062a\u063a\u06cc\u06cc\u0631\u06cc\u0627\u0641\u062a\u0647", callback_data="setmode_modified")],
-            [InlineKeyboardButton("\U0001f512 \u067e\u0646\u0647\u0627\u0646 \u062a\u0627 \u0645\u0686", callback_data="setmode_hidden")]
+            [InlineKeyboardButton("🎤 ویس واقعی", callback_data="setmode_real")],
+            [InlineKeyboardButton("🔧 ویس تغییریافته", callback_data="setmode_modified")],
+            [InlineKeyboardButton("🔒 پنهان تا مچ", callback_data="setmode_hidden")]
         ])
-        await context.bot.send_message(chat_id=from_id, text="\u062d\u0627\u0644\u062a \u062c\u062f\u06cc\u062f \u0631\u0648 \u0627\u0646\u062a\u062e\u0627\u0628 \u06a9\u0646:", reply_markup=keyboard)
+        await context.bot.send_message(chat_id=from_id, text="حالت جدید رو انتخاب کن:", reply_markup=keyboard)
         return
 
     if query.data.startswith("setmode_"):
@@ -485,14 +655,14 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from_id = update.effective_user.id
         await db_patch("users", f"telegram_id=eq.{from_id}", {"voice_mode": mode})
         label = get_voice_label(mode)
-        await context.bot.send_message(chat_id=from_id, text=f"\u2705 \u062d\u0627\u0644\u062a \u0648\u06cc\u0633 \u062a\u063a\u06cc\u06cc\u0631 \u06a9\u0631\u062f: {label}", reply_markup=main_menu())
+        await context.bot.send_message(chat_id=from_id, text=f"✅ حالت ویس تغییر کرد: {label}", reply_markup=main_menu())
         return
 
     if query.data == "add_voice" or query.data == "replace_voice":
         from_id = update.effective_user.id
         await context.bot.send_message(
             chat_id=from_id,
-            text="\U0001f3a4 \u06cc\u06a9 \u0648\u06cc\u0633 \u0628\u06cc\u0646 10 \u062a\u0627 30 \u062b\u0627\u0646\u06cc\u0647 \u0628\u0641\u0631\u0633\u062a:",
+            text="🎤 یک ویس بین 10 تا 30 ثانیه بفرست:",
             reply_markup=ReplyKeyboardRemove()
         )
         context.user_data["waiting_voice"] = True
@@ -514,23 +684,23 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data == "coins_invite":
         my_id = update.effective_user.id
         link = f"https://t.me/{BOT_USERNAME}?start=ref_{my_id}"
-        await context.bot.send_message(chat_id=my_id, text=f"\u0644\u06cc\u0646\u06a9 \u062f\u0639\u0648\u062a:\n{link}\n\n\u0628\u0647 \u0627\u0632\u0627\u06cc \u0647\u0631 \u062f\u0648\u0633\u062a 5 \u0633\u06a9\u0647 \u0647\u062f\u06cc\u0647 \u0645\u06cc\u06af\u06cc\u0631\u06cc\u062f!")
+        await context.bot.send_message(chat_id=my_id, text=f"لینک دعوت:\n{link}\n\nبه ازای هر دوست 5 سکه هدیه میگیرید!")
         return
 
     if query.data == "coins_buy":
-        await context.bot.send_message(chat_id=update.effective_user.id, text="\u062e\u0631\u06cc\u062f \u0633\u06a9\u0647 \u0628\u0647 \u0632\u0648\u062f\u06cc \u0641\u0639\u0627\u0644 \u0645\u06cc\u0634\u0648\u062f!")
+        await context.bot.send_message(chat_id=update.effective_user.id, text="خرید سکه به زودی فعال میشود!")
         return
 
     if query.data == "coins_vip":
         await context.bot.send_message(
             chat_id=update.effective_user.id,
             text=(
-                "\u2b50 \u0627\u0645\u06a9\u0627\u0646\u0627\u062a VIP:\n\n"
-                "1 - \u0627\u0648\u0644 \u0644\u06cc\u0633\u062a \u062c\u0633\u062a\u062c\u0648\u200c\u0647\u0627\n"
-                "2 - \u0646\u0634\u0627\u0646 VIP \u0631\u0648\u06cc \u067e\u0631\u0648\u0641\u0627\u06cc\u0644\n"
-                "3 - \u062f\u0631\u062e\u0648\u0627\u0633\u062a \u0686\u062a \u0628\u0647 10 \u0646\u0641\u0631\n"
-                "4 - \u067e\u06cc\u0627\u0645 \u062f\u0627\u06cc\u0631\u06a9\u062a \u0628\u0647 10 \u0646\u0641\u0631\n\n"
-                "\u0628\u0647 \u0632\u0648\u062f\u06cc \u0641\u0639\u0627\u0644 \u0645\u06cc\u0634\u0648\u062f!"
+                "⭐ امکانات VIP:\n\n"
+                "1 - اول لیست جستجوها\n"
+                "2 - نشان VIP روی پروفایل\n"
+                "3 - درخواست چت به 10 نفر\n"
+                "4 - پیام دایرکت به 10 نفر\n\n"
+                "به زودی فعال میشود!"
             )
         )
         return
@@ -543,13 +713,13 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
         to_id = update.effective_user.id
         msgs = await db_get("direct_messages", f"id=eq.{msg_id}")
         if not msgs:
-            await query.answer("\u067e\u06cc\u0627\u0645 \u067e\u06cc\u062f\u0627 \u0646\u0634\u062f!", show_alert=True)
+            await query.answer("پیام پیدا نشد!", show_alert=True)
             return
         msg = msgs[0]
         if not is_paid:
             to_coins = await get_coins(to_id)
             if to_coins <= 0:
-                await query.answer("\u0633\u06a9\u0647 \u06a9\u0627\u0641\u06cc \u0646\u062f\u0627\u0631\u06cc\u062f!", show_alert=True)
+                await query.answer("سکه کافی ندارید!", show_alert=True)
                 return
             await deduct_coin(to_id)
         try:
@@ -558,12 +728,12 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
         dm_text = msg.get("message", "")
         kb = InlineKeyboardMarkup([[
-            InlineKeyboardButton("\U0001f4ac \u067e\u0627\u0633\u062e \u062f\u0627\u062f\u0646", callback_data=f"chatreq_{from_id}"),
-            InlineKeyboardButton("\u2764\ufe0f \u0644\u0627\u06cc\u06a9", callback_data=f"like_{from_id}")
+            InlineKeyboardButton("💬 پاسخ دادن", callback_data=f"chatreq_{from_id}"),
+            InlineKeyboardButton("❤️ لایک", callback_data=f"like_{from_id}")
         ]])
         await context.bot.send_message(
             chat_id=to_id,
-            text=f"\U0001f4e9 \u067e\u06cc\u0627\u0645 \u062e\u0635\u0648\u0635\u06cc:\n\n\"{dm_text}\"",
+            text=f"📩 پیام خصوصی:\n\n\"{dm_text}\"",
             reply_markup=kb
         )
         return
@@ -592,7 +762,7 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_reply_markup(reply_markup=None)
         except:
             pass
-        await context.bot.send_message(chat_id=from_id, text="\u06a9\u0627\u0631\u0628\u0631 \u0628\u0644\u0627\u06a9 \u0634\u062f.")
+        await context.bot.send_message(chat_id=from_id, text="کاربر بلاک شد.")
         return
 
     if query.data.startswith("report_"):
@@ -604,7 +774,7 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_reply_markup(reply_markup=None)
         except:
             pass
-        await context.bot.send_message(chat_id=from_id, text="\u06af\u0632\u0627\u0631\u0634 \u062b\u0628\u062a \u0634\u062f!")
+        await context.bot.send_message(chat_id=from_id, text="گزارش ثبت شد!")
         return
 
     if query.data.startswith("chatreq_"):
@@ -613,12 +783,12 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
         my_profile = await db_get("users", f"telegram_id=eq.{from_id}")
         if my_profile:
             u = my_profile[0]
-            vip_badge = "\u2b50 VIP | " if u.get("is_vip") else ""
+            vip_badge = "⭐ VIP | " if u.get("is_vip") else ""
             voice_badge = get_voice_badge(u)
-            text = f"{voice_badge}{vip_badge}\u062f\u0631\u062e\u0648\u0627\u0633\u062a \u0686\u062a!\n\u062c\u0646\u0633\u06cc\u062a: {u['gender']}\n\u0633\u0646: {u['age']}\n\u0634\u0647\u0631: {u['city']}\n\u0639\u0644\u0627\u06cc\u0642: {u['interests']}"
+            text = f"{voice_badge}{vip_badge}درخواست چت!\nجنسیت: {u['gender']}\nسن: {u['age']}\nشهر: {u['city']}\nعلایق: {u['interests']}"
             kb = InlineKeyboardMarkup([[
-                InlineKeyboardButton("\u2705 \u0642\u0628\u0648\u0644", callback_data=f"accept_{from_id}"),
-                InlineKeyboardButton("\u274c \u0631\u062f", callback_data=f"reject_{from_id}")
+                InlineKeyboardButton("✅ قبول", callback_data=f"accept_{from_id}"),
+                InlineKeyboardButton("❌ رد", callback_data=f"reject_{from_id}")
             ]])
             try:
                 if u.get("photo_id"):
@@ -629,7 +799,7 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await send_voice_profile(context.bot, to_id, u, is_matched=False)
             except:
                 pass
-        await context.bot.send_message(chat_id=from_id, text="\u062f\u0631\u062e\u0648\u0627\u0633\u062a \u0686\u062a \u0641\u0631\u0633\u062a\u0627\u062f\u0647 \u0634\u062f!")
+        await context.bot.send_message(chat_id=from_id, text="درخواست چت فرستاده شد!")
         return
 
     if query.data.startswith("dm_"):
@@ -638,7 +808,7 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["dm_to"] = to_id
         await context.bot.send_message(
             chat_id=from_id,
-            text="\U0001f4e8 \u067e\u06cc\u0627\u0645 \u062e\u0635\u0648\u0635\u06cc\u062a \u0631\u0648 \u0628\u0646\u0648\u06cc\u0633:",
+            text="📨 پیام خصوصیت رو بنویس:",
             reply_markup=ReplyKeyboardRemove()
         )
         return
@@ -652,8 +822,8 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_reply_markup(reply_markup=None)
         except:
             pass
-        await context.bot.send_message(chat_id=to_id, text="\u0686\u062a \u0634\u0631\u0648\u0639 \u0634\u062f!", reply_markup=chat_menu())
-        await context.bot.send_message(chat_id=from_id, text="\u062f\u0631\u062e\u0648\u0627\u0633\u062a \u0642\u0628\u0648\u0644 \u0634\u062f!", reply_markup=chat_menu())
+        await context.bot.send_message(chat_id=to_id, text="چت شروع شد!", reply_markup=chat_menu())
+        await context.bot.send_message(chat_id=from_id, text="درخواست قبول شد!", reply_markup=chat_menu())
         from_profile = await db_get("users", f"telegram_id=eq.{from_id}")
         to_profile = await db_get("users", f"telegram_id=eq.{to_id}")
         if from_profile and from_profile[0].get("has_voice"):
@@ -668,7 +838,7 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_reply_markup(reply_markup=None)
         except:
             pass
-        await context.bot.send_message(chat_id=from_id, text="\u062f\u0631\u062e\u0648\u0627\u0633\u062a \u0686\u062a \u0634\u0645\u0627 \u0631\u062f \u0634\u062f.")
+        await context.bot.send_message(chat_id=from_id, text="درخواست چت شما رد شد.")
         return
 
     to_id = int(query.data.split("_")[1])
@@ -676,17 +846,120 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await db_post("likes", {"from_user": from_id, "to_user": to_id})
     likes = await db_get("likes", f"from_user=eq.{to_id}&to_user=eq.{from_id}")
     if likes:
-        await context.bot.send_message(chat_id=from_id, text="\u0645\u0627\u062a\u0686 \u0634\u062f\u06cc\u062f!")
+        await context.bot.send_message(chat_id=from_id, text="ماتچ شدید!")
         try:
-            await context.bot.send_message(chat_id=to_id, text="\u0645\u0627\u062a\u0686 \u0634\u062f\u06cc\u062f!")
+            await context.bot.send_message(chat_id=to_id, text="ماتچ شدید!")
         except:
             pass
     else:
-        await context.bot.send_message(chat_id=from_id, text="\u0644\u0627\u06cc\u06a9 \u062b\u0628\u062a \u0634\u062f!")
+        await context.bot.send_message(chat_id=from_id, text="لایک ثبت شد!")
         try:
-            await context.bot.send_message(chat_id=to_id, text="\u06cc\u06a9 \u0646\u0641\u0631 \u0628\u0647 \u067e\u0631\u0648\u0641\u0627\u06cc\u0644\u062a \u0639\u0644\u0627\u0642\u0647 \u0646\u0634\u0648\u0646 \u062f\u0627\u062f!")
+            await context.bot.send_message(chat_id=to_id, text="یک نفر به پروفایلت علاقه نشون داد!")
         except:
             pass
+
+async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    my_id = update.effective_user.id
+    if my_id not in ADMIN_IDS:
+        return False
+    action = context.user_data.get("admin_action")
+    if not action:
+        return False
+    text = update.message.text.strip()
+    if action == "ban":
+        try:
+            user_id = int(text)
+            await db_patch("users", f"telegram_id=eq.{user_id}", {"is_banned": True, "shadowban_level": 3})
+            await update.message.reply_text(f"✅ کاربر {user_id} بن شد!", reply_markup=main_menu())
+            try:
+                await context.bot.send_message(chat_id=user_id, text="⛔ حساب شما توسط ادمین مسدود شده است.")
+            except:
+                pass
+        except:
+            await update.message.reply_text("آیدی نامعتبر!", reply_markup=main_menu())
+        context.user_data["admin_action"] = None
+        return True
+    elif action == "unban":
+        try:
+            user_id = int(text)
+            await db_patch("users", f"telegram_id=eq.{user_id}", {"is_banned": False, "shadowban_level": 0})
+            await update.message.reply_text(f"✅ کاربر {user_id} آنبن شد!", reply_markup=main_menu())
+            try:
+                await context.bot.send_message(chat_id=user_id, text="✅ حساب شما رفع مسدودیت شد.")
+            except:
+                pass
+        except:
+            await update.message.reply_text("آیدی نامعتبر!", reply_markup=main_menu())
+        context.user_data["admin_action"] = None
+        return True
+    elif action == "coins":
+        try:
+            user_id = int(text)
+            context.user_data["admin_coins_target"] = user_id
+            context.user_data["admin_action"] = "coins_amount"
+            await update.message.reply_text("چند سکه اضافه کنم؟")
+        except:
+            await update.message.reply_text("آیدی نامعتبر!", reply_markup=main_menu())
+            context.user_data["admin_action"] = None
+        return True
+    elif action == "coins_amount":
+        try:
+            amount = int(text)
+            target_id = context.user_data.get("admin_coins_target")
+            await add_coins(target_id, amount)
+            await update.message.reply_text(f"✅ {amount} سکه به کاربر {target_id} اضافه شد!", reply_markup=main_menu())
+            try:
+                await context.bot.send_message(chat_id=target_id, text=f"💰 {amount} سکه توسط ادمین به حساب شما اضافه شد!")
+            except:
+                pass
+        except:
+            await update.message.reply_text("عدد نامعتبر!", reply_markup=main_menu())
+        context.user_data["admin_action"] = None
+        return True
+    elif action == "broadcast":
+        users = await db_get("users", "select=telegram_id")
+        sent = 0
+        failed = 0
+        for u in users:
+            try:
+                await context.bot.send_message(chat_id=u["telegram_id"], text=f"📢 پیام از ادمین:\n\n{text}")
+                sent += 1
+            except:
+                failed += 1
+        await update.message.reply_text(f"✅ پیام ارسال شد!\nموفق: {sent}\nناموفق: {failed}", reply_markup=main_menu())
+        context.user_data["admin_action"] = None
+        return True
+    elif action == "detail":
+        try:
+            user_id = int(text)
+            users = await db_get("users", f"telegram_id=eq.{user_id}")
+            if not users:
+                await update.message.reply_text("کاربر پیدا نشد!", reply_markup=main_menu())
+            else:
+                u = users[0]
+                coins = await get_coins(user_id)
+                trust = await get_trust(user_id)
+                detail_text = (
+                    f"🔍 جزئیات کاربر:\n"
+                    f"━━━━━━━━\n"
+                    f"آیدی: {u['telegram_id']}\n"
+                    f"جنسیت: {u.get('gender', '-')}\n"
+                    f"سن: {u.get('age', '-')}\n"
+                    f"استان: {u.get('province', '-')}\n"
+                    f"شهر: {u.get('city', '-')}\n"
+                    f"علایق: {u.get('interests', '-')}\n"
+                    f"سکه: {coins}\n"
+                    f"VIP: {'✅' if u.get('is_vip') else '❌'}\n"
+                    f"بن: {'✅' if u.get('is_banned') else '❌'}\n"
+                    f"امتیاز اعتماد: {trust.get('trust_score', 50)}\n"
+                    f"shadowban: {u.get('shadowban_level', 0)}\n"
+                )
+                await update.message.reply_text(detail_text, reply_markup=main_menu())
+        except:
+            await update.message.reply_text("آیدی نامعتبر!", reply_markup=main_menu())
+        context.user_data["admin_action"] = None
+        return True
+    return False
 
 async def handle_voice_in_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     my_id = update.effective_user.id
@@ -696,12 +969,12 @@ async def handle_voice_in_chat(update: Update, context: ContextTypes.DEFAULT_TYP
             context.user_data["temp_voice_id"] = voice.file_id
             context.user_data["temp_voice_duration"] = voice.duration
             keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("\U0001f3a4 \u0648\u06cc\u0633 \u0648\u0627\u0642\u0639\u06cc", callback_data="vmode_real")],
-                [InlineKeyboardButton("\U0001f527 \u0648\u06cc\u0633 \u062a\u063a\u06cc\u06cc\u0631\u06cc\u0627\u0641\u062a\u0647", callback_data="vmode_modified")],
-                [InlineKeyboardButton("\U0001f512 \u067e\u0646\u0647\u0627\u0646 \u062a\u0627 \u0645\u0686", callback_data="vmode_hidden")]
+                [InlineKeyboardButton("🎤 ویس واقعی", callback_data="vmode_real")],
+                [InlineKeyboardButton("🔧 ویس تغییریافته", callback_data="vmode_modified")],
+                [InlineKeyboardButton("🔒 پنهان تا مچ", callback_data="vmode_hidden")]
             ])
             await update.message.reply_text(
-                "\u0648\u06cc\u0633\u062a \u062f\u0631\u06cc\u0627\u0641\u062a \u0634\u062f!\n\u0686\u0637\u0648\u0631 \u0646\u0645\u0627\u06cc\u0634 \u062f\u0627\u062f\u0647 \u0628\u0634\u0647\u061f",
+                "ویست دریافت شد!\nچطور نمایش داده بشه؟",
                 reply_markup=keyboard
             )
             context.user_data["waiting_voice"] = False
@@ -711,11 +984,11 @@ async def handle_voice_in_chat(update: Update, context: ContextTypes.DEFAULT_TYP
 async def browse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     my_id = update.effective_user.id
     if not check_queue_limit(my_id):
-        await update.message.reply_text("\u062e\u06cc\u0644\u06cc \u0633\u0631\u06cc\u0639 \u0627\u0633\u062a\u0641\u0627\u062f\u0647 \u0645\u06cc\u06a9\u0646\u06cc\u062f! \u06a9\u0645\u06cc \u0635\u0628\u0631 \u06a9\u0646\u06cc\u062f.")
+        await update.message.reply_text("خیلی سریع استفاده میکنید! کمی صبر کنید.")
         return
     coins = await get_coins(my_id)
     if coins <= 0:
-        await update.message.reply_text("\u0633\u06a9\u0647 \u06a9\u0627\u0641\u06cc \u0646\u062f\u0627\u0631\u06cc!")
+        await update.message.reply_text("سکه کافی نداری!")
         return
     blocked = await db_get("blocks", f"blocker=eq.{my_id}&select=blocked")
     blocked_ids = [b["blocked"] for b in blocked] if blocked else []
@@ -724,17 +997,17 @@ async def browse(update: Update, context: ContextTypes.DEFAULT_TYPE):
         all_users = await db_get("users", f"telegram_id=neq.{my_id}&limit=1")
         users = [u for u in all_users if u["telegram_id"] not in blocked_ids]
     if not users:
-        await update.message.reply_text("\u0641\u0639\u0644\u0627 \u06a9\u0627\u0631\u0628\u0631 \u062f\u06cc\u06af\u0631\u06cc \u0646\u06cc\u0633\u062a!")
+        await update.message.reply_text("فعلا کاربر دیگری نیست!")
         return
     user = users[0]
     await deduct_coin(my_id)
-    vip_badge = "\u2b50 VIP | " if user.get("is_vip") else ""
+    vip_badge = "⭐ VIP | " if user.get("is_vip") else ""
     voice_badge = get_voice_badge(user)
-    text = f"{voice_badge}{vip_badge}\u062c\u0646\u0633\u06cc\u062a: {user['gender']}\n\u0633\u0646: {user['age']}\n\u0627\u0633\u062a\u0627\u0646: {user['province']}\n\u0634\u0647\u0631: {user['city']}\n\u0639\u0644\u0627\u06cc\u0642: {user['interests']}\n\u0633\u06a9\u0647 \u0628\u0627\u0642\u06cc: {coins-1}"
+    text = f"{voice_badge}{vip_badge}جنسیت: {user['gender']}\nسن: {user['age']}\nاستان: {user['province']}\nشهر: {user['city']}\nعلایق: {user['interests']}\nسکه باقی: {coins-1}"
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("\u2764\ufe0f \u0644\u0627\u06cc\u06a9", callback_data=f"like_{user['telegram_id']}"), InlineKeyboardButton("\u274e \u0628\u0639\u062f\u06cc", callback_data="skip")],
-        [InlineKeyboardButton("\U0001f4ac \u0686\u062a", callback_data=f"chatreq_{user['telegram_id']}"), InlineKeyboardButton("\U0001f4e8 \u067e\u06cc\u0627\u0645", callback_data=f"dm_{user['telegram_id']}")],
-        [InlineKeyboardButton("\u26d4 \u0628\u0644\u0627\u06a9", callback_data=f"block_{user['telegram_id']}"), InlineKeyboardButton("\u26a0\ufe0f \u06af\u0632\u0627\u0631\u0634", callback_data=f"report_{user['telegram_id']}")]
+        [InlineKeyboardButton("❤️ لایک", callback_data=f"like_{user['telegram_id']}"), InlineKeyboardButton("✖ بعدی", callback_data="skip")],
+        [InlineKeyboardButton("💬 چت", callback_data=f"chatreq_{user['telegram_id']}"), InlineKeyboardButton("📨 پیام", callback_data=f"dm_{user['telegram_id']}")],
+        [InlineKeyboardButton("⛔ بلاک", callback_data=f"block_{user['telegram_id']}"), InlineKeyboardButton("⚠️ گزارش", callback_data=f"report_{user['telegram_id']}")]
     ])
     if user.get("photo_id"):
         await update.message.reply_photo(photo=user["photo_id"], caption=text, reply_markup=keyboard)
@@ -747,15 +1020,15 @@ async def random_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     my_id = update.effective_user.id
     users = await db_get("users", f"telegram_id=neq.{my_id}")
     if not users:
-        await update.message.reply_text("\u0641\u0639\u0644\u0627 \u06a9\u0627\u0631\u0628\u0631 \u062f\u06cc\u06af\u0631\u06cc \u0646\u06cc\u0633\u062a!")
+        await update.message.reply_text("فعلا کاربر دیگری نیست!")
         return
     user = random.choice(users)
-    vip_badge = "\u2b50 VIP | " if user.get("is_vip") else ""
+    vip_badge = "⭐ VIP | " if user.get("is_vip") else ""
     voice_badge = get_voice_badge(user)
-    text = f"{voice_badge}{vip_badge}\u06cc\u06a9 \u0646\u0641\u0631 \u062a\u0635\u0627\u062f\u0641\u06cc!\n\u062c\u0646\u0633\u06cc\u062a: {user['gender']}\n\u0633\u0646: {user['age']}\n\u0634\u0647\u0631: {user['city']}\n\u0639\u0644\u0627\u06cc\u0642: {user['interests']}"
+    text = f"{voice_badge}{vip_badge}یک نفر تصادفی!\nجنسیت: {user['gender']}\nسن: {user['age']}\nشهر: {user['city']}\nعلایق: {user['interests']}"
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("\u2764\ufe0f \u0644\u0627\u06cc\u06a9", callback_data=f"like_{user['telegram_id']}"), InlineKeyboardButton("\u274e \u062f\u06cc\u06af\u0631\u06cc", callback_data="random_next")],
-        [InlineKeyboardButton("\U0001f4ac \u0686\u062a", callback_data=f"chatreq_{user['telegram_id']}"), InlineKeyboardButton("\U0001f4e8 \u067e\u06cc\u0627\u0645", callback_data=f"dm_{user['telegram_id']}")]
+        [InlineKeyboardButton("❤️ لایک", callback_data=f"like_{user['telegram_id']}"), InlineKeyboardButton("✖ دیگری", callback_data="random_next")],
+        [InlineKeyboardButton("💬 چت", callback_data=f"chatreq_{user['telegram_id']}"), InlineKeyboardButton("📨 پیام", callback_data=f"dm_{user['telegram_id']}")]
     ])
     if user.get("photo_id"):
         await update.message.reply_photo(photo=user["photo_id"], caption=text, reply_markup=keyboard)
@@ -766,21 +1039,21 @@ async def same_age(update: Update, context: ContextTypes.DEFAULT_TYPE):
     my_id = update.effective_user.id
     my_profile = await db_get("users", f"telegram_id=eq.{my_id}")
     if not my_profile:
-        await update.message.reply_text("\u0627\u0648\u0644 \u062b\u0628\u062a\u200c\u0646\u0627\u0645 \u06a9\u0646! /register \u0628\u0632\u0646")
+        await update.message.reply_text("اول ثبت‌نام کن! /register بزن")
         return
     my_age = my_profile[0]["age"]
     users = await db_get("users", f"telegram_id=neq.{my_id}&age=eq.{my_age}&limit=5")
     if not users:
-        await update.message.reply_text(f"\u06a9\u0633\u06cc \u0628\u0627 \u0633\u0646 {my_age} \u067e\u06cc\u062f\u0627 \u0646\u0634\u062f!")
+        await update.message.reply_text(f"کسی با سن {my_age} پیدا نشد!")
         return
-    await update.message.reply_text(f"{len(users)} \u0646\u0641\u0631 \u0647\u0645\u200c\u0633\u0646 \u067e\u06cc\u062f\u0627 \u0634\u062f:")
+    await update.message.reply_text(f"{len(users)} نفر هم‌سن پیدا شد:")
     for user in users:
-        vip_badge = "\u2b50 VIP | " if user.get("is_vip") else ""
+        vip_badge = "⭐ VIP | " if user.get("is_vip") else ""
         voice_badge = get_voice_badge(user)
-        text = f"{voice_badge}{vip_badge}\u062c\u0646\u0633\u06cc\u062a: {user['gender']}\n\u0633\u0646: {user['age']}\n\u0627\u0633\u062a\u0627\u0646: {user['province']}\n\u0634\u0647\u0631: {user['city']}\n\u0639\u0644\u0627\u06cc\u0642: {user['interests']}"
+        text = f"{voice_badge}{vip_badge}جنسیت: {user['gender']}\nسن: {user['age']}\nاستان: {user['province']}\nشهر: {user['city']}\nعلایق: {user['interests']}"
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("\u2764\ufe0f \u0644\u0627\u06cc\u06a9", callback_data=f"like_{user['telegram_id']}"), InlineKeyboardButton("\u274e \u0628\u0639\u062f\u06cc", callback_data="skip")],
-            [InlineKeyboardButton("\U0001f4ac \u0686\u062a", callback_data=f"chatreq_{user['telegram_id']}"), InlineKeyboardButton("\U0001f4e8 \u067e\u06cc\u0627\u0645", callback_data=f"dm_{user['telegram_id']}")]
+            [InlineKeyboardButton("❤️ لایک", callback_data=f"like_{user['telegram_id']}"), InlineKeyboardButton("✖ بعدی", callback_data="skip")],
+            [InlineKeyboardButton("💬 چت", callback_data=f"chatreq_{user['telegram_id']}"), InlineKeyboardButton("📨 پیام", callback_data=f"dm_{user['telegram_id']}")]
         ])
         if user.get("photo_id"):
             await update.message.reply_photo(photo=user["photo_id"], caption=text, reply_markup=keyboard)
@@ -789,7 +1062,7 @@ async def same_age(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def nearby(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [["5 km", "10 km"], ["30 km", "60 km"]]
-    await update.message.reply_text("\u062a\u0627 \u0686\u0647 \u0641\u0627\u0635\u0644\u0647\u200c\u0627\u06cc\u061f", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
+    await update.message.reply_text("تا چه فاصله‌ای؟", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
     return NEARBY_DISTANCE
 
 async def nearby_distance(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -798,14 +1071,14 @@ async def nearby_distance(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["nearby_km"] = int(text)
     except:
         context.user_data["nearby_km"] = 10
-    location_button = KeyboardButton("\U0001f4cd \u0627\u0631\u0633\u0627\u0644 \u0645\u0648\u0642\u0639\u06cc\u062a", request_location=True)
+    location_button = KeyboardButton("📍 ارسال موقعیت", request_location=True)
     keyboard = ReplyKeyboardMarkup([[location_button]], one_time_keyboard=True, resize_keyboard=True)
-    await update.message.reply_text("\u0645\u0648\u0642\u0639\u06cc\u062a\u062a \u0631\u0648 \u0628\u0641\u0631\u0633\u062a:", reply_markup=keyboard)
+    await update.message.reply_text("موقعیتت رو بفرست:", reply_markup=keyboard)
     return NEARBY_LOCATION
 
 async def nearby_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.location:
-        await update.message.reply_text("\u0644\u0637\u0641\u0627 \u0645\u0648\u0642\u0639\u06cc\u062a \u0628\u0641\u0631\u0633\u062a:")
+        await update.message.reply_text("لطفا موقعیت بفرست:")
         return NEARBY_LOCATION
     my_id = update.effective_user.id
     my_lat = update.message.location.latitude
@@ -823,16 +1096,16 @@ async def nearby_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 nearby_users.append(user)
     nearby_users.sort(key=lambda x: x["distance"])
     if not nearby_users:
-        await update.message.reply_text(f"\u06a9\u0633\u06cc \u062f\u0631 {max_km} \u06a9\u06cc\u0644\u0648\u0645\u062a\u0631 \u067e\u06cc\u062f\u0627 \u0646\u0634\u062f!", reply_markup=main_menu())
+        await update.message.reply_text(f"کسی در {max_km} کیلومتر پیدا نشد!", reply_markup=main_menu())
         return ConversationHandler.END
-    await update.message.reply_text(f"{len(nearby_users)} \u0646\u0641\u0631 \u062f\u0631 {max_km} \u06a9\u06cc\u0644\u0648\u0645\u062a\u0631 \u067e\u06cc\u062f\u0627 \u0634\u062f:", reply_markup=main_menu())
+    await update.message.reply_text(f"{len(nearby_users)} نفر در {max_km} کیلومتر پیدا شد:", reply_markup=main_menu())
     for user in nearby_users[:5]:
-        vip_badge = "\u2b50 VIP | " if user.get("is_vip") else ""
+        vip_badge = "⭐ VIP | " if user.get("is_vip") else ""
         voice_badge = get_voice_badge(user)
-        text = f"{voice_badge}{vip_badge}\u062c\u0646\u0633\u06cc\u062a: {user['gender']}\n\u0633\u0646: {user['age']}\n\u0634\u0647\u0631: {user['city']}\n\u0639\u0644\u0627\u06cc\u0642: {user['interests']}\n\U0001f4cd \u0641\u0627\u0635\u0644\u0647: {user['distance_bucket']}"
+        text = f"{voice_badge}{vip_badge}جنسیت: {user['gender']}\nسن: {user['age']}\nشهر: {user['city']}\nعلایق: {user['interests']}\n📍 فاصله: {user['distance_bucket']}"
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("\u2764\ufe0f \u0644\u0627\u06cc\u06a9", callback_data=f"like_{user['telegram_id']}"), InlineKeyboardButton("\u274e \u0628\u0639\u062f\u06cc", callback_data="skip")],
-            [InlineKeyboardButton("\U0001f4ac \u0686\u062a", callback_data=f"chatreq_{user['telegram_id']}"), InlineKeyboardButton("\U0001f4e8 \u067e\u06cc\u0627\u0645", callback_data=f"dm_{user['telegram_id']}")]
+            [InlineKeyboardButton("❤️ لایک", callback_data=f"like_{user['telegram_id']}"), InlineKeyboardButton("✖ بعدی", callback_data="skip")],
+            [InlineKeyboardButton("💬 چت", callback_data=f"chatreq_{user['telegram_id']}"), InlineKeyboardButton("📨 پیام", callback_data=f"dm_{user['telegram_id']}")]
         ])
         if user.get("photo_id"):
             await update.message.reply_photo(photo=user["photo_id"], caption=text, reply_markup=keyboard)
@@ -841,20 +1114,20 @@ async def nearby_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def search(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [["\u067e\u0633\u0631", "\u062f\u062e\u062a\u0631", "\u0647\u0631 \u062f\u0648"]]
-    await update.message.reply_text("\u062c\u0646\u0633\u06cc\u062a \u0645\u0648\u0631\u062f \u0646\u0638\u0631\u062a\u061f", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
+    keyboard = [["پسر", "دختر", "هر دو"]]
+    await update.message.reply_text("جنسیت مورد نظرت؟", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
     return SEARCH_GENDER
 
 async def search_gender(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["search_gender"] = update.message.text
-    keyboard = [["\u0647\u0631 \u0633\u0646\u06cc", "18-25", "26-35"], ["36-45", "46-60"]]
-    await update.message.reply_text("\u0628\u0627\u0632\u0647 \u0633\u0646\u06cc\u061f", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
+    keyboard = [["هر سنی", "18-25", "26-35"], ["36-45", "46-60"]]
+    await update.message.reply_text("بازه سنی؟", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
     return SEARCH_AGE
 
 async def search_age(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["search_age"] = update.message.text
-    keyboard = [["\u062a\u0647\u0631\u0627\u0646", "\u0627\u0635\u0641\u0647\u0627\u0646", "\u0645\u0634\u0647\u062f"], ["\u0634\u06cc\u0631\u0627\u0632", "\u062a\u0628\u0631\u06cc\u0632", "\u0633\u0627\u06cc\u0631"], ["\u0647\u0645\u0647 \u0627\u0633\u062a\u0627\u0646\u200c\u0647\u0627"]]
-    await update.message.reply_text("\u0627\u0633\u062a\u0627\u0646\u061f", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
+    keyboard = [["تهران", "اصفهان", "مشهد"], ["شیراز", "تبریز", "سایر"], ["همه استان‌ها"]]
+    await update.message.reply_text("استان؟", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
     return SEARCH_PROVINCE
 
 async def search_province(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -863,9 +1136,9 @@ async def search_province(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sa = context.user_data.get("search_age", "")
     sp = update.message.text
     params = f"telegram_id=neq.{my_id}"
-    if sg != "\u0647\u0631 \u062f\u0648":
+    if sg != "هر دو":
         params += f"&gender=eq.{sg}"
-    if sp != "\u0647\u0645\u0647 \u0627\u0633\u062a\u0627\u0646\u200c\u0647\u0627":
+    if sp != "همه استان‌ها":
         params += f"&province=eq.{sp}"
     if sa == "18-25":
         params += "&age=gte.18&age=lte.25"
@@ -877,14 +1150,14 @@ async def search_province(update: Update, context: ContextTypes.DEFAULT_TYPE):
         params += "&age=gte.46&age=lte.60"
     params += "&limit=5"
     users = await db_get("users", params)
-    await update.message.reply_text(f"{len(users)} \u0646\u0641\u0631 \u067e\u06cc\u062f\u0627 \u0634\u062f:", reply_markup=main_menu())
+    await update.message.reply_text(f"{len(users)} نفر پیدا شد:", reply_markup=main_menu())
     for user in users:
-        vip_badge = "\u2b50 VIP | " if user.get("is_vip") else ""
+        vip_badge = "⭐ VIP | " if user.get("is_vip") else ""
         voice_badge = get_voice_badge(user)
-        text = f"{voice_badge}{vip_badge}\u062c\u0646\u0633\u06cc\u062a: {user['gender']}\n\u0633\u0646: {user['age']}\n\u0627\u0633\u062a\u0627\u0646: {user['province']}\n\u0634\u0647\u0631: {user['city']}\n\u0639\u0644\u0627\u06cc\u0642: {user['interests']}"
+        text = f"{voice_badge}{vip_badge}جنسیت: {user['gender']}\nسن: {user['age']}\nاستان: {user['province']}\nشهر: {user['city']}\nعلایق: {user['interests']}"
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("\u2764\ufe0f \u0644\u0627\u06cc\u06a9", callback_data=f"like_{user['telegram_id']}"), InlineKeyboardButton("\u274e \u0628\u0639\u062f\u06cc", callback_data="skip")],
-            [InlineKeyboardButton("\U0001f4ac \u0686\u062a", callback_data=f"chatreq_{user['telegram_id']}"), InlineKeyboardButton("\U0001f4e8 \u067e\u06cc\u0627\u0645", callback_data=f"dm_{user['telegram_id']}")]
+            [InlineKeyboardButton("❤️ لایک", callback_data=f"like_{user['telegram_id']}"), InlineKeyboardButton("✖ بعدی", callback_data="skip")],
+            [InlineKeyboardButton("💬 چت", callback_data=f"chatreq_{user['telegram_id']}"), InlineKeyboardButton("📨 پیام", callback_data=f"dm_{user['telegram_id']}")]
         ])
         if user.get("photo_id"):
             await update.message.reply_photo(photo=user["photo_id"], caption=text, reply_markup=keyboard)
@@ -893,68 +1166,68 @@ async def search_province(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def edit_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [["\u0634\u0647\u0631", "\u0639\u0644\u0627\u06cc\u0642"], ["\u0639\u06a9\u0633", "\u0628\u0627\u0632\u06af\u0634\u062a"]]
-    await update.message.reply_text("\u0686\u06cc \u0631\u0648 \u0645\u06cc\u062e\u0648\u0627\u06cc \u0648\u06cc\u0631\u0627\u06cc\u0634 \u06a9\u0646\u06cc\u061f", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
+    keyboard = [["شهر", "علایق"], ["عکس", "بازگشت"]]
+    await update.message.reply_text("چی رو میخوای ویرایش کنی؟", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
     return EDIT_CHOICE
 
 async def edit_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     choice = update.message.text
     context.user_data["edit_field"] = choice
-    if choice == "\u0639\u06a9\u0633":
-        await update.message.reply_text("\u0639\u06a9\u0633 \u062c\u062f\u06cc\u062f \u0628\u0641\u0631\u0633\u062a:", reply_markup=ReplyKeyboardRemove())
+    if choice == "عکس":
+        await update.message.reply_text("عکس جدید بفرست:", reply_markup=ReplyKeyboardRemove())
         return EDIT_VALUE
-    elif choice == "\u0628\u0627\u0632\u06af\u0634\u062a":
-        await update.message.reply_text("\u0644\u063a\u0648 \u0634\u062f.", reply_markup=main_menu())
+    elif choice == "بازگشت":
+        await update.message.reply_text("لغو شد.", reply_markup=main_menu())
         return ConversationHandler.END
-    elif choice == "\u0634\u0647\u0631":
-        await update.message.reply_text("\u0634\u0647\u0631 \u062c\u062f\u06cc\u062f \u0628\u0646\u0648\u06cc\u0633:", reply_markup=ReplyKeyboardRemove())
+    elif choice == "شهر":
+        await update.message.reply_text("شهر جدید بنویس:", reply_markup=ReplyKeyboardRemove())
         return EDIT_VALUE
-    elif choice == "\u0639\u0644\u0627\u06cc\u0642":
-        keyboard = [["\u0645\u0648\u0633\u06cc\u0642\u06cc", "\u0647\u0646\u0631", "\u06a9\u062a\u0627\u0628"], ["\u0648\u0631\u0632\u0634", "\u0628\u0627\u0632\u06cc", "\u063a\u0630\u0627"], ["\u0633\u0641\u0631", "\u0641\u06cc\u0644\u0645", "\u062a\u06a9\u0646\u0648\u0644\u0648\u0698\u06cc"]]
-        await update.message.reply_text("\u0639\u0644\u0627\u06cc\u0642 \u062c\u062f\u06cc\u062f:", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
+    elif choice == "علایق":
+        keyboard = [["موسیقی", "هنر", "کتاب"], ["ورزش", "بازی", "غذا"], ["سفر", "فیلم", "تکنولوژی"]]
+        await update.message.reply_text("علایق جدید:", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
         return EDIT_VALUE
 
 async def edit_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
     my_id = update.effective_user.id
     field = context.user_data.get("edit_field")
-    if field == "\u0639\u06a9\u0633":
+    if field == "عکس":
         if not update.message.photo:
-            await update.message.reply_text("\u0644\u0637\u0641\u0627 \u0639\u06a9\u0633 \u0628\u0641\u0631\u0633\u062a:")
+            await update.message.reply_text("لطفا عکس بفرست:")
             return EDIT_VALUE
         photo_id = update.message.photo[-1].file_id
         await db_patch("users", f"telegram_id=eq.{my_id}", {"photo_id": photo_id})
-    elif field == "\u0634\u0647\u0631":
+    elif field == "شهر":
         await db_patch("users", f"telegram_id=eq.{my_id}", {"city": update.message.text})
-    elif field == "\u0639\u0644\u0627\u06cc\u0642":
+    elif field == "علایق":
         await db_patch("users", f"telegram_id=eq.{my_id}", {"interests": update.message.text})
-    await update.message.reply_text("\u067e\u0631\u0648\u0641\u0627\u06cc\u0644 \u0628\u0647\u200c\u0631\u0648\u0632 \u0634\u062f!", reply_markup=main_menu())
+    await update.message.reply_text("پروفایل به‌روز شد!", reply_markup=main_menu())
     return ConversationHandler.END
 
 async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     my_id = update.effective_user.id
     users = await db_get("users", f"telegram_id=eq.{my_id}")
     if not users:
-        await update.message.reply_text("\u0647\u0646\u0648\u0632 \u062b\u0628\u062a\u200c\u0646\u0627\u0645 \u0646\u06a9\u0631\u062f\u06cc! /register \u0628\u0632\u0646")
+        await update.message.reply_text("هنوز ثبت‌نام نکردی! /register بزن")
         return
     user = users[0]
     coins = await get_coins(my_id)
     trust = await get_trust(my_id)
     trust_score = trust.get("trust_score", 50)
-    vip_badge = "\u2b50 VIP\n" if user.get("is_vip") else ""
+    vip_badge = "⭐ VIP\n" if user.get("is_vip") else ""
     voice_info = ""
     if user.get("has_voice"):
         mode = user.get("voice_mode", VOICE_MODE_REAL)
         label = get_voice_label(mode)
         voice_info = f"{label}\n"
     text = (
-        f"{vip_badge}{voice_info}\u067e\u0631\u0648\u0641\u0627\u06cc\u0644 \u0645\u0646:\n"
-        f"\u062c\u0646\u0633\u06cc\u062a: {user['gender']}\n"
-        f"\u0633\u0646: {user['age']}\n"
-        f"\u0627\u0633\u062a\u0627\u0646: {user['province']}\n"
-        f"\u0634\u0647\u0631: {user['city']}\n"
-        f"\u0639\u0644\u0627\u06cc\u0642: {user['interests']}\n"
-        f"\u0633\u06a9\u0647: {coins}\n"
-        f"\u0627\u0645\u062a\u06cc\u0627\u0632 \u0627\u0639\u062a\u0645\u0627\u062f: {trust_score}/100"
+        f"{vip_badge}{voice_info}پروفایل من:\n"
+        f"جنسیت: {user['gender']}\n"
+        f"سن: {user['age']}\n"
+        f"استان: {user['province']}\n"
+        f"شهر: {user['city']}\n"
+        f"علایق: {user['interests']}\n"
+        f"سکه: {coins}\n"
+        f"امتیاز اعتماد: {trust_score}/100"
     )
     if user.get("photo_id"):
         await update.message.reply_photo(photo=user["photo_id"], caption=text)
@@ -964,47 +1237,47 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def invite(update: Update, context: ContextTypes.DEFAULT_TYPE):
     my_id = update.effective_user.id
     link = f"https://t.me/{BOT_USERNAME}?start=ref_{my_id}"
-    await update.message.reply_text(f"\u0644\u06cc\u0646\u06a9 \u062f\u0639\u0648\u062a \u0634\u0645\u0627:\n{link}\n\n\u0628\u0647 \u0627\u0632\u0627\u06cc \u0647\u0631 \u062f\u0648\u0633\u062a 5 \u0633\u06a9\u0647 \u0647\u062f\u06cc\u0647 \u0645\u06cc\u06af\u06cc\u0631\u06cc\u062f!")
+    await update.message.reply_text(f"لینک دعوت شما:\n{link}\n\nبه ازای هر دوست 5 سکه هدیه میگیرید!")
 
 async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [["\u067e\u0633\u0631", "\u062f\u062e\u062a\u0631"]]
-    await update.message.reply_text("\u062c\u0646\u0633\u06cc\u062a \u0634\u0645\u0627\u061f", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
+    keyboard = [["پسر", "دختر"]]
+    await update.message.reply_text("جنسیت شما؟", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
     return GENDER
 
 async def gender(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["gender"] = update.message.text
-    await update.message.reply_text("\u0633\u0646 \u0634\u0645\u0627\u061f \u062d\u062f\u0627\u0642\u0644 18", reply_markup=ReplyKeyboardRemove())
+    await update.message.reply_text("سن شما؟ حداقل 18", reply_markup=ReplyKeyboardRemove())
     return AGE
 
 async def age(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     if not text.isdigit() or int(text) < 18:
-        await update.message.reply_text("\u0633\u0646 \u0628\u0627\u06cc\u062f \u062d\u062f\u0627\u0642\u0644 18 \u0628\u0627\u0634\u0647:")
+        await update.message.reply_text("سن باید حداقل 18 باشه:")
         return AGE
     context.user_data["age"] = int(text)
-    keyboard = [["\u062a\u0647\u0631\u0627\u0646", "\u0627\u0635\u0641\u0647\u0627\u0646", "\u0645\u0634\u0647\u062f"], ["\u0634\u06cc\u0631\u0627\u0632", "\u062a\u0628\u0631\u06cc\u0632", "\u0627\u0647\u0648\u0627\u0632"], ["\u0633\u0627\u06cc\u0631"]]
-    await update.message.reply_text("\u0627\u0633\u062a\u0627\u0646 \u0634\u0645\u0627\u061f", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
+    keyboard = [["تهران", "اصفهان", "مشهد"], ["شیراز", "تبریز", "اهواز"], ["سایر"]]
+    await update.message.reply_text("استان شما؟", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
     return PROVINCE
 
 async def province(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["province"] = update.message.text
-    await update.message.reply_text("\u0634\u0647\u0631 \u0634\u0645\u0627\u061f", reply_markup=ReplyKeyboardRemove())
+    await update.message.reply_text("شهر شما؟", reply_markup=ReplyKeyboardRemove())
     return CITY
 
 async def city(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["city"] = update.message.text
-    keyboard = [["\u0645\u0648\u0633\u06cc\u0642\u06cc", "\u0647\u0646\u0631", "\u06a9\u062a\u0627\u0628"], ["\u0648\u0631\u0632\u0634", "\u0628\u0627\u0632\u06cc", "\u063a\u0630\u0627"], ["\u0633\u0641\u0631", "\u0641\u06cc\u0644\u0645", "\u062a\u06a9\u0646\u0648\u0644\u0648\u0698\u06cc"]]
-    await update.message.reply_text("\u0639\u0644\u0627\u06cc\u0642\u062a \u0631\u0648 \u0627\u0646\u062a\u062e\u0627\u0628 \u06a9\u0646:", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
+    keyboard = [["موسیقی", "هنر", "کتاب"], ["ورزش", "بازی", "غذا"], ["سفر", "فیلم", "تکنولوژی"]]
+    await update.message.reply_text("علایقت رو انتخاب کن:", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
     return INTERESTS
 
 async def interests(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["interests"] = update.message.text
-    await update.message.reply_text("\u0639\u06a9\u0633 \u067e\u0631\u0648\u0641\u0627\u06cc\u0644\u062a \u0631\u0648 \u0628\u0641\u0631\u0633\u062a:", reply_markup=ReplyKeyboardRemove())
+    await update.message.reply_text("عکس پروفایلت رو بفرست:", reply_markup=ReplyKeyboardRemove())
     return PHOTO
 
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.photo:
-        await update.message.reply_text("\u0644\u0637\u0641\u0627 \u06cc\u06a9 \u0639\u06a9\u0633 \u0628\u0641\u0631\u0633\u062a:")
+        await update.message.reply_text("لطفا یک عکس بفرست:")
         return PHOTO
     photo_id = update.message.photo[-1].file_id
     data = context.user_data
@@ -1018,17 +1291,23 @@ async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "photo_id": photo_id,
         "coins": 10,
         "is_vip": False,
+        "is_banned": False,
         "trust_score": 50,
         "trust_level": "normal",
         "shadowban_level": 0,
         "has_voice": False
     })
-    await update.message.reply_text("\u062b\u0628\u062a\u200c\u0646\u0627\u0645 \u06a9\u0627\u0645\u0644 \u0634\u062f! 10 \u0633\u06a9\u0647 \u0647\u062f\u06cc\u0647 \u06af\u0631\u0641\u062a\u06cc!", reply_markup=main_menu())
+    await update.message.reply_text("ثبت‌نام کامل شد! 10 سکه هدیه گرفتی!", reply_markup=main_menu())
     return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("\u0644\u063a\u0648 \u0634\u062f.", reply_markup=main_menu())
+    await update.message.reply_text("لغو شد.", reply_markup=main_menu())
     return ConversationHandler.END
+
+async def smart_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    handled = await handle_admin_text(update, context)
+    if not handled:
+        await menu_handler(update, context)
 
 def main():
     TOKEN = "8992632783:AAEyc2COdSjBC3cWlSVvY-oG6AZMAcW3nq4"
@@ -1108,17 +1387,4 @@ def main():
     app.add_handler(dm_conv)
     app.add_handler(voice_conv)
     app.add_handler(CallbackQueryHandler(handle_like))
-    app.add_handler(MessageHandler(filters.PHOTO, forward_media))
-    app.add_handler(MessageHandler(filters.VIDEO, forward_media))
-    app.add_handler(MessageHandler(filters.VOICE, handle_voice_in_chat))
-    app.add_handler(MessageHandler(filters.AUDIO, forward_media))
-    app.add_handler(MessageHandler(filters.Sticker.ALL, forward_media))
-    app.add_handler(MessageHandler(filters.VIDEO_NOTE, forward_media))
-    app.add_handler(MessageHandler(filters.Document.ALL, forward_media))
-    app.add_handler(MessageHandler(filters.ANIMATION, forward_media))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
-    print("\u0631\u0628\u0627\u062a \u0634\u0631\u0648\u0639 \u0628\u0647 \u06a9\u0627\u0631 \u06a9\u0631\u062f...")
-    app.run_polling()
-
-if __name__ == "__main__":
-    main()
+    
