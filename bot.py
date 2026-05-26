@@ -1387,4 +1387,17 @@ def main():
     app.add_handler(dm_conv)
     app.add_handler(voice_conv)
     app.add_handler(CallbackQueryHandler(handle_like))
-    
+    app.add_handler(MessageHandler(filters.PHOTO, forward_media))
+    app.add_handler(MessageHandler(filters.VIDEO, forward_media))
+    app.add_handler(MessageHandler(filters.VOICE, handle_voice_in_chat))
+    app.add_handler(MessageHandler(filters.AUDIO, forward_media))
+    app.add_handler(MessageHandler(filters.Sticker.ALL, forward_media))
+    app.add_handler(MessageHandler(filters.VIDEO_NOTE, forward_media))
+    app.add_handler(MessageHandler(filters.Document.ALL, forward_media))
+    app.add_handler(MessageHandler(filters.ANIMATION, forward_media))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, smart_menu_handler))
+    print("ربات شروع به کار کرد...")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
