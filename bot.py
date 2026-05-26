@@ -53,6 +53,14 @@ VOICE_MODE_SELECT = 16
 
 active_chats = {}
 
+def get_user_link(user):
+    username = user.get("username")
+    tid = user.get("telegram_id")
+    if username:
+        return f'<a href="https://t.me/{username}">پروفایل تلگرام</a>'
+    else:
+        return f'<a href="tg://user?id={tid}">پروفایل تلگرام</a>'
+
 def main_menu():
     keyboard = [
         ["👥 مرور پروفایل‌ها", "🔍 جستجوی پیشرفته"],
@@ -138,8 +146,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reports = len(await db_get("reports", ""))
     blocks = len(await db_get("blocks", ""))
     text = (
-        f"📊 پنل ادمین\n"
-        f"━━━━━━━━\n"
+        f"📊 پنل ادمین\n━━━━━━━━\n"
         f"👥 کل کاربران: {total}\n"
         f"⭐ کاربران VIP: {vip_count}\n"
         f"🎤 دارای ویس: {voice_count}\n"
@@ -159,6 +166,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     my_id = update.effective_user.id
+    username = update.effective_user.username or ""
     args = context.args
     if args and args[0].startswith("ref_"):
         referrer_id = int(args[0].split("_")[1])
@@ -172,6 +180,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     pass
     existing = await db_get("users", f"telegram_id=eq.{my_id}")
     if existing:
+        await db_patch("users", f"telegram_id=eq.{my_id}", {"username": username})
         await update.message.reply_text("خوش برگشتی به هوشی گپ!", reply_markup=main_menu())
     else:
         await update.message.reply_text("سلام! به هوشی گپ خوش اومدی!\n/register بزن", reply_markup=ReplyKeyboardRemove())
@@ -188,108 +197,17 @@ async def voice_profile_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
             [InlineKeyboardButton("🔒 تغییر حریم خصوصی", callback_data="change_voice_mode")],
             [InlineKeyboardButton("❌ حذف ویس", callback_data="delete_voice")]
         ])
-        await update.message.reply_text(
-            f"🎤 ویس پروفایل فعاله!\nمدت: {voice.get('voice_duration', 0)} ثانیه\nحالت: {label}",
-            reply_markup=keyboard
-        )
+        await update.message.reply_text(f"🎤 ویس پروفایل فعاله!\nمدت: {voice.get('voice_duration', 0)} ثانیه\nحالت: {label}", reply_markup=keyboard)
     else:
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🎤 اضافه کردن ویس پروفایل", callback_data="add_voice")]
-        ])
-        await update.message.reply_text(
-            "🎤 ویس پروفایل نداری!\n\nبا اضافه کردن ویس:\n✅ امتیاز اعتماد +5\n✅ دیده شدن بیشتر\n✅ مچ بهتر",
-            reply_markup=keyboard
-        )
-
-async def handle_voice_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    my_id = update.effective_user.id
-    if not update.message.voice:
-        await update.message.reply_text("لطفا ویس بفرستید!", reply_markup=main_menu())
-        return ConversationHandler.END
-    voice = update.message.voice
-    context.user_data["temp_voice_id"] = voice.file_id
-    context.user_data["temp_voice_duration"] = voice.duration
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🎤 ویس واقعی", callback_data="vmode_real")],
-        [InlineKeyboardButton("🔧 ویس تغییریافته", callback_data="vmode_modified")],
-        [InlineKeyboardButton("🔒 پنهان تا مچ", callback_data="vmode_hidden")]
-    ])
-    await update.message.reply_text("ویست دریافت شد!\nچطور نمایش داده بشه؟", reply_markup=keyboard)
-    return ConversationHandler.END
-
-async def send_dm(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    to_id = context.user_data.get("dm_to")
-    if not to_id:
-        await update.message.reply_text("خطای فنی!", reply_markup=main_menu())
-        return ConversationHandler.END
-    from_id = update.effective_user.id
-    message_text = update.message.text
-    if not check_rate_limit(from_id):
-        await update.message.reply_text("پیام ها رو کمتر بفرستید!")
-        return ConversationHandler.END
-    result_analysis = await analyze_message(from_id, message_text)
-    if result_analysis == "toxic":
-        await update.message.reply_text("پیام شما نامناسب بود و ارسال نشد!", reply_markup=main_menu())
-        return ConversationHandler.END
-    from_coins = await get_coins(from_id)
-    if from_coins >= 1:
-        await deduct_coin(from_id)
-        is_paid = True
-    else:
-        is_paid = False
-    result = await db_post("direct_messages", {
-        "from_user": from_id,
-        "to_user": to_id,
-        "message": message_text,
-        "is_paid": is_paid
-    })
-    msg_id = result[0]["id"] if result and len(result) > 0 else None
-    from_profile = await db_get("users", f"telegram_id=eq.{from_id}")
-    if from_profile:
-        u = from_profile[0]
-        vip_badge = "⭐ VIP | " if u.get("is_vip") else ""
-        voice_badge = get_voice_badge(u)
-        if is_paid:
-            notif = (
-                f"📨 پیام خصوصی جدید!\n"
-                f"{voice_badge}{vip_badge}جنسیت: {u['gender']} | سن: {u['age']} | شهر: {u['city']}\n\n"
-                f"برای خواندن پیام روی دکمه زیر بزنید:"
-            )
-        else:
-            notif = (
-                f"📨 پیام خصوصی جدید!\n"
-                f"{voice_badge}{vip_badge}جنسیت: {u['gender']} | سن: {u['age']} | شهر: {u['city']}\n\n"
-                f"⚠️ فرستنده سکه کافی نداشت!\n"
-                f"برای خواندن پیام، 1 سکه از شما کسر میشود:"
-            )
-        if msg_id:
-            kb = InlineKeyboardMarkup([[
-                InlineKeyboardButton("📩 خواندن پیام", callback_data=f"readdm_{msg_id}_{from_id}_{is_paid}")
-            ]])
-            try:
-                if u.get("photo_id"):
-                    await context.bot.send_photo(chat_id=to_id, photo=u["photo_id"], caption=notif, reply_markup=kb)
-                else:
-                    await context.bot.send_message(chat_id=to_id, text=notif, reply_markup=kb)
-            except:
-                pass
-    await update.message.reply_text("✅ پیام ارسال شد!", reply_markup=main_menu())
-    return ConversationHandler.END
+        keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🎤 اضافه کردن ویس پروفایل", callback_data="add_voice")]])
+        await update.message.reply_text("🎤 ویس پروفایل نداری!\n\nبا اضافه کردن ویس:\n✅ امتیاز اعتماد +5\n✅ دیده شدن بیشتر\n✅ مچ بهتر", reply_markup=keyboard)
 
 async def coins_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     my_id = update.effective_user.id
     coins = await get_coins(my_id)
     vip = await is_vip(my_id)
     vip_text = "⭐ VIP فعال" if vip else "VIP ندارید"
-    text = (
-        f"💰 کیف پول شما\n"
-        f"سکه: {coins} عدد\n"
-        f"وضعیت: {vip_text}\n\n"
-        f"روش‌های دریافت سکه:\n\n"
-        f"1 - معرفی دوستان - رایگان\n"
-        f"2 - خرید سکه - به زودی\n"
-        f"3 - خرید VIP - امکانات ویژه"
-    )
+    text = f"💰 کیف پول شما\nسکه: {coins} عدد\nوضعیت: {vip_text}\n\nروش‌های دریافت سکه:\n1 - معرفی دوستان - رایگان\n2 - خرید سکه - به زودی\n3 - خرید VIP - امکانات ویژه"
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🎁 معرفی دوستان (رایگان)", callback_data="coins_invite")],
         [InlineKeyboardButton("💳 خرید سکه (به زودی)", callback_data="coins_buy")],
@@ -344,44 +262,6 @@ async def forward_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_animation(chat_id=partner_id, animation=msg.animation.file_id)
     except:
         pass
-
-async def recent_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [["پسر", "دختر", "همه"]]
-    await update.message.reply_text("چت‌های اخیر با چه جنسیتی؟", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
-    return RECENT_GENDER
-
-async def recent_gender(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    my_id = update.effective_user.id
-    gender_filter = update.message.text
-    history1 = await db_get("chat_history", f"user1=eq.{my_id}")
-    history2 = await db_get("chat_history", f"user2=eq.{my_id}")
-    partner_ids = [h["user2"] for h in history1] + [h["user1"] for h in history2]
-    if not partner_ids:
-        await update.message.reply_text("هنوز چتی نداشتی!", reply_markup=main_menu())
-        return ConversationHandler.END
-    found = []
-    for pid in partner_ids:
-        users = await db_get("users", f"telegram_id=eq.{pid}")
-        if users:
-            u = users[0]
-            if gender_filter == "همه" or u.get("gender") == gender_filter:
-                found.append(u)
-    if not found:
-        await update.message.reply_text("کسی پیدا نشد!", reply_markup=main_menu())
-        return ConversationHandler.END
-    await update.message.reply_text(f"{len(found)} نفر پیدا شد:", reply_markup=main_menu())
-    for user in found[:10]:
-        vip_badge = "⭐ VIP | " if user.get("is_vip") else ""
-        voice_badge = get_voice_badge(user)
-        text = f"{voice_badge}{vip_badge}آیدی: {user['telegram_id']}\nجنسیت: {user['gender']}\nسن: {user['age']}\nشهر: {user['city']}\nعلایق: {user['interests']}"
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("💬 چت", callback_data=f"chatreq_{user['telegram_id']}"), InlineKeyboardButton("❤️ لایک", callback_data=f"like_{user['telegram_id']}")]
-        ])
-        if user.get("photo_id"):
-            await update.message.reply_photo(photo=user["photo_id"], caption=text, reply_markup=keyboard)
-        else:
-            await update.message.reply_text(text, reply_markup=keyboard)
-    return ConversationHandler.END
 
 async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     my_id = update.effective_user.id
@@ -464,29 +344,27 @@ async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 u = users[0]
                 coins = await get_coins(user_id)
                 trust = await get_trust(user_id)
+                user_link = get_user_link(u)
                 detail_text = (
-                    f"🔍 جزئیات کاربر:\n"
-                    f"━━━━━━━━\n"
+                    f"🔍 جزئیات کاربر:\n━━━━━━━━\n"
                     f"آیدی: {u['telegram_id']}\n"
+                    f"🔗 {user_link}\n"
                     f"جنسیت: {u.get('gender', '-')}\n"
                     f"سن: {u.get('age', '-')}\n"
-                    f"استان: {u.get('province', '-')}\n"
                     f"شهر: {u.get('city', '-')}\n"
-                    f"علایق: {u.get('interests', '-')}\n"
                     f"سکه: {coins}\n"
                     f"VIP: {'✅' if u.get('is_vip') else '❌'}\n"
                     f"بن: {'✅' if u.get('is_banned') else '❌'}\n"
                     f"امتیاز اعتماد: {trust.get('trust_score', 50)}\n"
-                    f"shadowban: {u.get('shadowban_level', 0)}\n"
                 )
-                await update.message.reply_text(detail_text, reply_markup=main_menu())
+                await update.message.reply_text(detail_text, reply_markup=main_menu(), parse_mode="HTML")
         except:
             await update.message.reply_text("آیدی نامعتبر!", reply_markup=main_menu())
         context.user_data["admin_action"] = None
         return True
     return False
 
-async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     my_id = update.effective_user.id
 
@@ -509,11 +387,12 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
         return
 
+    handled = await handle_admin_text(update, context)
+    if handled:
+        return
+
     if "مرور پروفایل" in text:
         await browse(update, context)
-    elif "جستجو" in text:
-        await search(update, context)
-        return SEARCH_GENDER
     elif "اتصال تصادفی" in text:
         await random_user(update, context)
     elif "پروفایل من" in text:
@@ -522,24 +401,197 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await coins_cmd(update, context)
     elif "دعوت" in text:
         await invite(update, context)
-    elif "ویرایش" in text:
-        await edit_profile(update, context)
-        return EDIT_CHOICE
     elif "هم‌سن" in text:
         await same_age(update, context)
-    elif "نزدیک" in text:
-        await nearby(update, context)
-        return NEARBY_DISTANCE
-    elif "چت‌های اخیر" in text:
-        await recent_chats(update, context)
-        return RECENT_GENDER
     elif "ویس پروفایل" in text:
         await voice_profile_menu(update, context)
 
-async def smart_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    handled = await handle_admin_text(update, context)
-    if not handled:
-        await menu_handler(update, context)
+async def search_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [["پسر", "دختر", "هر دو"]]
+    await update.message.reply_text("جنسیت مورد نظرت؟", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
+    return SEARCH_GENDER
+
+async def search_gender(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["search_gender"] = update.message.text
+    keyboard = [["هر سنی", "18-25", "26-35"], ["36-45", "46-60"]]
+    await update.message.reply_text("بازه سنی؟", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
+    return SEARCH_AGE
+
+async def search_age(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["search_age"] = update.message.text
+    keyboard = [["تهران", "اصفهان", "مشهد"], ["شیراز", "تبریز", "سایر"], ["همه استان‌ها"]]
+    await update.message.reply_text("استان؟", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
+    return SEARCH_PROVINCE
+
+async def search_province(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    my_id = update.effective_user.id
+    sg = context.user_data.get("search_gender", "")
+    sa = context.user_data.get("search_age", "")
+    sp = update.message.text
+    params = f"telegram_id=neq.{my_id}"
+    if sg != "هر دو":
+        params += f"&gender=eq.{sg}"
+    if sp != "همه استان‌ها":
+        params += f"&province=eq.{sp}"
+    if sa == "18-25":
+        params += "&age=gte.18&age=lte.25"
+    elif sa == "26-35":
+        params += "&age=gte.26&age=lte.35"
+    elif sa == "36-45":
+        params += "&age=gte.36&age=lte.45"
+    elif sa == "46-60":
+        params += "&age=gte.46&age=lte.60"
+    params += "&limit=5"
+    users = await db_get("users", params)
+    await update.message.reply_text(f"{len(users)} نفر پیدا شد:", reply_markup=main_menu())
+    for user in users:
+        vip_badge = "⭐ VIP | " if user.get("is_vip") else ""
+        voice_badge = get_voice_badge(user)
+        user_link = get_user_link(user)
+        text = f"{voice_badge}{vip_badge}جنسیت: {user['gender']}\nسن: {user['age']}\nاستان: {user['province']}\nشهر: {user['city']}\nعلایق: {user['interests']}\n🔗 {user_link}"
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("❤️ لایک", callback_data=f"like_{user['telegram_id']}"), InlineKeyboardButton("✖ بعدی", callback_data="skip")],
+            [InlineKeyboardButton("💬 چت", callback_data=f"chatreq_{user['telegram_id']}"), InlineKeyboardButton("📨 پیام", callback_data=f"dm_{user['telegram_id']}")]
+        ])
+        if user.get("photo_id"):
+            await update.message.reply_photo(photo=user["photo_id"], caption=text, reply_markup=keyboard, parse_mode="HTML")
+        else:
+            await update.message.reply_text(text, reply_markup=keyboard, parse_mode="HTML")
+    return ConversationHandler.END
+
+async def edit_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [["شهر", "علایق"], ["عکس", "بازگشت"]]
+    await update.message.reply_text("چی رو میخوای ویرایش کنی؟", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
+    return EDIT_CHOICE
+
+async def edit_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    choice = update.message.text
+    context.user_data["edit_field"] = choice
+    if choice == "عکس":
+        await update.message.reply_text("عکس جدید بفرست:", reply_markup=ReplyKeyboardRemove())
+        return EDIT_VALUE
+    elif choice == "بازگشت":
+        await update.message.reply_text("لغو شد.", reply_markup=main_menu())
+        return ConversationHandler.END
+    elif choice == "شهر":
+        await update.message.reply_text("شهر جدید بنویس:", reply_markup=ReplyKeyboardRemove())
+        return EDIT_VALUE
+    elif choice == "علایق":
+        keyboard = [["موسیقی", "هنر", "کتاب"], ["ورزش", "بازی", "غذا"], ["سفر", "فیلم", "تکنولوژی"]]
+        await update.message.reply_text("علایق جدید رو انتخاب کن:", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
+        return EDIT_VALUE
+    else:
+        await update.message.reply_text("گزینه نامعتبر!", reply_markup=main_menu())
+        return ConversationHandler.END
+
+async def edit_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    my_id = update.effective_user.id
+    field = context.user_data.get("edit_field")
+    if field == "عکس":
+        if not update.message.photo:
+            await update.message.reply_text("لطفا عکس بفرست:")
+            return EDIT_VALUE
+        photo_id = update.message.photo[-1].file_id
+        await db_patch("users", f"telegram_id=eq.{my_id}", {"photo_id": photo_id})
+    elif field == "شهر":
+        await db_patch("users", f"telegram_id=eq.{my_id}", {"city": update.message.text})
+    elif field == "علایق":
+        await db_patch("users", f"telegram_id=eq.{my_id}", {"interests": update.message.text})
+    await update.message.reply_text("✅ پروفایل به‌روز شد!", reply_markup=main_menu())
+    return ConversationHandler.END
+
+async def nearby_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [["5 km", "10 km"], ["30 km", "60 km"]]
+    await update.message.reply_text("تا چه فاصله‌ای؟", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
+    return NEARBY_DISTANCE
+
+async def nearby_distance(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.lower().replace(" km", "").replace("km", "").strip()
+    try:
+        context.user_data["nearby_km"] = int(text)
+    except:
+        context.user_data["nearby_km"] = 10
+    location_button = KeyboardButton("📍 ارسال موقعیت", request_location=True)
+    keyboard = ReplyKeyboardMarkup([[location_button]], one_time_keyboard=True, resize_keyboard=True)
+    await update.message.reply_text("موقعیتت رو بفرست:", reply_markup=keyboard)
+    return NEARBY_LOCATION
+
+async def nearby_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message.location:
+        await update.message.reply_text("لطفا موقعیت بفرست:")
+        return NEARBY_LOCATION
+    my_id = update.effective_user.id
+    my_lat = update.message.location.latitude
+    my_lon = update.message.location.longitude
+    max_km = context.user_data.get("nearby_km", 10)
+    await update_user_location(my_id, my_lat, my_lon)
+    all_users = await db_get("users", f"telegram_id=neq.{my_id}&latitude=not.is.null")
+    nearby_users = []
+    for user in all_users:
+        if user.get("latitude") and user.get("longitude"):
+            dist = distance_km(my_lat, my_lon, user["latitude"], user["longitude"])
+            if dist <= max_km:
+                user["distance"] = round(dist, 1)
+                user["distance_bucket"] = get_distance_bucket(dist)
+                nearby_users.append(user)
+    nearby_users.sort(key=lambda x: x["distance"])
+    if not nearby_users:
+        await update.message.reply_text(f"کسی در {max_km} کیلومتر پیدا نشد!", reply_markup=main_menu())
+        return ConversationHandler.END
+    await update.message.reply_text(f"{len(nearby_users)} نفر در {max_km} کیلومتر پیدا شد:", reply_markup=main_menu())
+    for user in nearby_users[:5]:
+        vip_badge = "⭐ VIP | " if user.get("is_vip") else ""
+        voice_badge = get_voice_badge(user)
+        user_link = get_user_link(user)
+        text = f"{voice_badge}{vip_badge}جنسیت: {user['gender']}\nسن: {user['age']}\nشهر: {user['city']}\nعلایق: {user['interests']}\n📍 فاصله: {user['distance_bucket']}\n🔗 {user_link}"
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("❤️ لایک", callback_data=f"like_{user['telegram_id']}"), InlineKeyboardButton("✖ بعدی", callback_data="skip")],
+            [InlineKeyboardButton("💬 چت", callback_data=f"chatreq_{user['telegram_id']}"), InlineKeyboardButton("📨 پیام", callback_data=f"dm_{user['telegram_id']}")]
+        ])
+        if user.get("photo_id"):
+            await update.message.reply_photo(photo=user["photo_id"], caption=text, reply_markup=keyboard, parse_mode="HTML")
+        else:
+            await update.message.reply_text(text, reply_markup=keyboard, parse_mode="HTML")
+    return ConversationHandler.END
+
+async def recent_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [["پسر", "دختر", "همه"]]
+    await update.message.reply_text("چت‌های اخیر با چه جنسیتی؟", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
+    return RECENT_GENDER
+
+async def recent_gender(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    my_id = update.effective_user.id
+    gender_filter = update.message.text
+    history1 = await db_get("chat_history", f"user1=eq.{my_id}")
+    history2 = await db_get("chat_history", f"user2=eq.{my_id}")
+    partner_ids = [h["user2"] for h in history1] + [h["user1"] for h in history2]
+    if not partner_ids:
+        await update.message.reply_text("هنوز چتی نداشتی!", reply_markup=main_menu())
+        return ConversationHandler.END
+    found = []
+    for pid in partner_ids:
+        users = await db_get("users", f"telegram_id=eq.{pid}")
+        if users:
+            u = users[0]
+            if gender_filter == "همه" or u.get("gender") == gender_filter:
+                found.append(u)
+    if not found:
+        await update.message.reply_text("کسی پیدا نشد!", reply_markup=main_menu())
+        return ConversationHandler.END
+    await update.message.reply_text(f"{len(found)} نفر پیدا شد:", reply_markup=main_menu())
+    for user in found[:10]:
+        vip_badge = "⭐ VIP | " if user.get("is_vip") else ""
+        voice_badge = get_voice_badge(user)
+        user_link = get_user_link(user)
+        text = f"{voice_badge}{vip_badge}جنسیت: {user['gender']}\nسن: {user['age']}\nشهر: {user['city']}\nعلایق: {user['interests']}\n🔗 {user_link}"
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("💬 چت", callback_data=f"chatreq_{user['telegram_id']}"), InlineKeyboardButton("❤️ لایک", callback_data=f"like_{user['telegram_id']}")]
+        ])
+        if user.get("photo_id"):
+            await update.message.reply_photo(photo=user["photo_id"], caption=text, reply_markup=keyboard, parse_mode="HTML")
+        else:
+            await update.message.reply_text(text, reply_markup=keyboard, parse_mode="HTML")
+    return ConversationHandler.END
 
 async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -638,13 +690,9 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=from_id, text=f"✅ حالت ویس تغییر کرد: {label}", reply_markup=main_menu())
         return
 
-    if query.data == "add_voice" or query.data == "replace_voice":
+    if query.data in ["add_voice", "replace_voice"]:
         from_id = update.effective_user.id
-        await context.bot.send_message(
-            chat_id=from_id,
-            text="🎤 یک ویس بین 10 تا 30 ثانیه بفرست:",
-            reply_markup=ReplyKeyboardRemove()
-        )
+        await context.bot.send_message(chat_id=from_id, text="🎤 یک ویس بین 10 تا 30 ثانیه بفرست:", reply_markup=ReplyKeyboardRemove())
         context.user_data["waiting_voice"] = True
         return
 
@@ -672,17 +720,7 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if query.data == "coins_vip":
-        await context.bot.send_message(
-            chat_id=update.effective_user.id,
-            text=(
-                "⭐ امکانات VIP:\n\n"
-                "1 - اول لیست جستجوها\n"
-                "2 - نشان VIP روی پروفایل\n"
-                "3 - درخواست چت به 10 نفر\n"
-                "4 - پیام دایرکت به 10 نفر\n\n"
-                "به زودی فعال میشود!"
-            )
-        )
+        await context.bot.send_message(chat_id=update.effective_user.id, text="⭐ امکانات VIP:\n\n1 - اول لیست جستجوها\n2 - نشان VIP روی پروفایل\n3 - درخواست چت به 10 نفر\n\nبه زودی فعال میشود!")
         return
 
     if query.data.startswith("readdm_"):
@@ -711,11 +749,7 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("💬 پاسخ دادن", callback_data=f"chatreq_{from_id}"),
             InlineKeyboardButton("❤️ لایک", callback_data=f"like_{from_id}")
         ]])
-        await context.bot.send_message(
-            chat_id=to_id,
-            text=f"📩 پیام خصوصی:\n\n\"{dm_text}\"",
-            reply_markup=kb
-        )
+        await context.bot.send_message(chat_id=to_id, text=f"📩 پیام خصوصی:\n\n\"{dm_text}\"", reply_markup=kb)
         return
 
     if query.data == "skip":
@@ -786,11 +820,7 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
         to_id = int(query.data.split("_")[1])
         from_id = update.effective_user.id
         context.user_data["dm_to"] = to_id
-        await context.bot.send_message(
-            chat_id=from_id,
-            text="📨 پیام خصوصیت رو بنویس:",
-            reply_markup=ReplyKeyboardRemove()
-        )
+        await context.bot.send_message(chat_id=from_id, text="📨 پیام خصوصیت رو بنویس:", reply_markup=ReplyKeyboardRemove())
         return
 
     if query.data.startswith("accept_"):
@@ -877,16 +907,17 @@ async def browse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await deduct_coin(my_id)
     vip_badge = "⭐ VIP | " if user.get("is_vip") else ""
     voice_badge = get_voice_badge(user)
-    text = f"{voice_badge}{vip_badge}آیدی: {user['telegram_id']}\nجنسیت: {user['gender']}\nسن: {user['age']}\nاستان: {user['province']}\nشهر: {user['city']}\nعلایق: {user['interests']}\nسکه باقی: {coins-1}"
+    user_link = get_user_link(user)
+    text = f"{voice_badge}{vip_badge}جنسیت: {user['gender']}\nسن: {user['age']}\nاستان: {user['province']}\nشهر: {user['city']}\nعلایق: {user['interests']}\nسکه باقی: {coins-1}\n🔗 {user_link}"
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("❤️ لایک", callback_data=f"like_{user['telegram_id']}"), InlineKeyboardButton("✖ بعدی", callback_data="skip")],
         [InlineKeyboardButton("💬 چت", callback_data=f"chatreq_{user['telegram_id']}"), InlineKeyboardButton("📨 پیام", callback_data=f"dm_{user['telegram_id']}")],
         [InlineKeyboardButton("⛔ بلاک", callback_data=f"block_{user['telegram_id']}"), InlineKeyboardButton("⚠️ گزارش", callback_data=f"report_{user['telegram_id']}")]
     ])
     if user.get("photo_id"):
-        await update.message.reply_photo(photo=user["photo_id"], caption=text, reply_markup=keyboard)
+        await update.message.reply_photo(photo=user["photo_id"], caption=text, reply_markup=keyboard, parse_mode="HTML")
     else:
-        await update.message.reply_text(text, reply_markup=keyboard)
+        await update.message.reply_text(text, reply_markup=keyboard, parse_mode="HTML")
     if user.get("has_voice"):
         await send_voice_profile(context.bot, my_id, user, is_matched=False)
 
@@ -899,15 +930,16 @@ async def random_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = random.choice(users)
     vip_badge = "⭐ VIP | " if user.get("is_vip") else ""
     voice_badge = get_voice_badge(user)
-    text = f"{voice_badge}{vip_badge}آیدی: {user['telegram_id']}\nیک نفر تصادفی!\nجنسیت: {user['gender']}\nسن: {user['age']}\nشهر: {user['city']}\nعلایق: {user['interests']}"
+    user_link = get_user_link(user)
+    text = f"{voice_badge}{vip_badge}یک نفر تصادفی!\nجنسیت: {user['gender']}\nسن: {user['age']}\nشهر: {user['city']}\nعلایق: {user['interests']}\n🔗 {user_link}"
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("❤️ لایک", callback_data=f"like_{user['telegram_id']}"), InlineKeyboardButton("✖ دیگری", callback_data="random_next")],
         [InlineKeyboardButton("💬 چت", callback_data=f"chatreq_{user['telegram_id']}"), InlineKeyboardButton("📨 پیام", callback_data=f"dm_{user['telegram_id']}")]
     ])
     if user.get("photo_id"):
-        await update.message.reply_photo(photo=user["photo_id"], caption=text, reply_markup=keyboard)
+        await update.message.reply_photo(photo=user["photo_id"], caption=text, reply_markup=keyboard, parse_mode="HTML")
     else:
-        await update.message.reply_text(text, reply_markup=keyboard)
+        await update.message.reply_text(text, reply_markup=keyboard, parse_mode="HTML")
 
 async def same_age(update: Update, context: ContextTypes.DEFAULT_TYPE):
     my_id = update.effective_user.id
@@ -924,161 +956,16 @@ async def same_age(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for user in users:
         vip_badge = "⭐ VIP | " if user.get("is_vip") else ""
         voice_badge = get_voice_badge(user)
-        text = f"{voice_badge}{vip_badge}آیدی: {user['telegram_id']}\nجنسیت: {user['gender']}\nسن: {user['age']}\nاستان: {user['province']}\nشهر: {user['city']}\nعلایق: {user['interests']}"
+        user_link = get_user_link(user)
+        text = f"{voice_badge}{vip_badge}جنسیت: {user['gender']}\nسن: {user['age']}\nاستان: {user['province']}\nشهر: {user['city']}\nعلایق: {user['interests']}\n🔗 {user_link}"
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("❤️ لایک", callback_data=f"like_{user['telegram_id']}"), InlineKeyboardButton("✖ بعدی", callback_data="skip")],
             [InlineKeyboardButton("💬 چت", callback_data=f"chatreq_{user['telegram_id']}"), InlineKeyboardButton("📨 پیام", callback_data=f"dm_{user['telegram_id']}")]
         ])
         if user.get("photo_id"):
-            await update.message.reply_photo(photo=user["photo_id"], caption=text, reply_markup=keyboard)
+            await update.message.reply_photo(photo=user["photo_id"], caption=text, reply_markup=keyboard, parse_mode="HTML")
         else:
-            await update.message.reply_text(text, reply_markup=keyboard)
-
-async def nearby(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [["5 km", "10 km"], ["30 km", "60 km"]]
-    await update.message.reply_text("تا چه فاصله‌ای؟", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
-    return NEARBY_DISTANCE
-
-async def nearby_distance(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.lower().replace(" km", "").replace("km", "").strip()
-    try:
-        context.user_data["nearby_km"] = int(text)
-    except:
-        context.user_data["nearby_km"] = 10
-    location_button = KeyboardButton("📍 ارسال موقعیت", request_location=True)
-    keyboard = ReplyKeyboardMarkup([[location_button]], one_time_keyboard=True, resize_keyboard=True)
-    await update.message.reply_text("موقعیتت رو بفرست:", reply_markup=keyboard)
-    return NEARBY_LOCATION
-
-async def nearby_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message.location:
-        await update.message.reply_text("لطفا موقعیت بفرست:")
-        return NEARBY_LOCATION
-    my_id = update.effective_user.id
-    my_lat = update.message.location.latitude
-    my_lon = update.message.location.longitude
-    max_km = context.user_data.get("nearby_km", 10)
-    await update_user_location(my_id, my_lat, my_lon)
-    all_users = await db_get("users", f"telegram_id=neq.{my_id}&latitude=not.is.null")
-    nearby_users = []
-    for user in all_users:
-        if user.get("latitude") and user.get("longitude"):
-            dist = distance_km(my_lat, my_lon, user["latitude"], user["longitude"])
-            if dist <= max_km:
-                user["distance"] = round(dist, 1)
-                user["distance_bucket"] = get_distance_bucket(dist)
-                nearby_users.append(user)
-    nearby_users.sort(key=lambda x: x["distance"])
-    if not nearby_users:
-        await update.message.reply_text(f"کسی در {max_km} کیلومتر پیدا نشد!", reply_markup=main_menu())
-        return ConversationHandler.END
-    await update.message.reply_text(f"{len(nearby_users)} نفر در {max_km} کیلومتر پیدا شد:", reply_markup=main_menu())
-    for user in nearby_users[:5]:
-        vip_badge = "⭐ VIP | " if user.get("is_vip") else ""
-        voice_badge = get_voice_badge(user)
-        text = f"{voice_badge}{vip_badge}آیدی: {user['telegram_id']}\nجنسیت: {user['gender']}\nسن: {user['age']}\nشهر: {user['city']}\nعلایق: {user['interests']}\n📍 فاصله: {user['distance_bucket']}"
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("❤️ لایک", callback_data=f"like_{user['telegram_id']}"), InlineKeyboardButton("✖ بعدی", callback_data="skip")],
-            [InlineKeyboardButton("💬 چت", callback_data=f"chatreq_{user['telegram_id']}"), InlineKeyboardButton("📨 پیام", callback_data=f"dm_{user['telegram_id']}")]
-        ])
-        if user.get("photo_id"):
-            await update.message.reply_photo(photo=user["photo_id"], caption=text, reply_markup=keyboard)
-        else:
-            await update.message.reply_text(text, reply_markup=keyboard)
-    return ConversationHandler.END
-
-async def search(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [["پسر", "دختر", "هر دو"]]
-    await update.message.reply_text("جنسیت مورد نظرت؟", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
-    return SEARCH_GENDER
-
-async def search_gender(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["search_gender"] = update.message.text
-    keyboard = [["هر سنی", "18-25", "26-35"], ["36-45", "46-60"]]
-    await update.message.reply_text("بازه سنی؟", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
-    return SEARCH_AGE
-
-async def search_age(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["search_age"] = update.message.text
-    keyboard = [["تهران", "اصفهان", "مشهد"], ["شیراز", "تبریز", "سایر"], ["همه استان‌ها"]]
-    await update.message.reply_text("استان؟", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
-    return SEARCH_PROVINCE
-
-async def search_province(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    my_id = update.effective_user.id
-    sg = context.user_data.get("search_gender", "")
-    sa = context.user_data.get("search_age", "")
-    sp = update.message.text
-    params = f"telegram_id=neq.{my_id}"
-    if sg != "هر دو":
-        params += f"&gender=eq.{sg}"
-    if sp != "همه استان‌ها":
-        params += f"&province=eq.{sp}"
-    if sa == "18-25":
-        params += "&age=gte.18&age=lte.25"
-    elif sa == "26-35":
-        params += "&age=gte.26&age=lte.35"
-    elif sa == "36-45":
-        params += "&age=gte.36&age=lte.45"
-    elif sa == "46-60":
-        params += "&age=gte.46&age=lte.60"
-    params += "&limit=5"
-    users = await db_get("users", params)
-    await update.message.reply_text(f"{len(users)} نفر پیدا شد:", reply_markup=main_menu())
-    for user in users:
-        vip_badge = "⭐ VIP | " if user.get("is_vip") else ""
-        voice_badge = get_voice_badge(user)
-        text = f"{voice_badge}{vip_badge}آیدی: {user['telegram_id']}\nجنسیت: {user['gender']}\nسن: {user['age']}\nاستان: {user['province']}\nشهر: {user['city']}\nعلایق: {user['interests']}"
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("❤️ لایک", callback_data=f"like_{user['telegram_id']}"), InlineKeyboardButton("✖ بعدی", callback_data="skip")],
-            [InlineKeyboardButton("💬 چت", callback_data=f"chatreq_{user['telegram_id']}"), InlineKeyboardButton("📨 پیام", callback_data=f"dm_{user['telegram_id']}")]
-        ])
-        if user.get("photo_id"):
-            await update.message.reply_photo(photo=user["photo_id"], caption=text, reply_markup=keyboard)
-        else:
-            await update.message.reply_text(text, reply_markup=keyboard)
-    return ConversationHandler.END
-
-async def edit_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [["شهر", "علایق"], ["عکس", "بازگشت"]]
-    await update.message.reply_text("چی رو میخوای ویرایش کنی؟", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
-    return EDIT_CHOICE
-
-async def edit_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    choice = update.message.text
-    context.user_data["edit_field"] = choice
-    if choice == "عکس":
-        await update.message.reply_text("عکس جدید بفرست:", reply_markup=ReplyKeyboardRemove())
-        return EDIT_VALUE
-    elif choice == "بازگشت":
-        await update.message.reply_text("لغو شد.", reply_markup=main_menu())
-        return ConversationHandler.END
-    elif choice == "شهر":
-        await update.message.reply_text("شهر جدید بنویس:", reply_markup=ReplyKeyboardRemove())
-        return EDIT_VALUE
-    elif choice == "علایق":
-        keyboard = [["موسیقی", "هنر", "کتاب"], ["ورزش", "بازی", "غذا"], ["سفر", "فیلم", "تکنولوژی"]]
-        await update.message.reply_text("علایق جدید رو انتخاب کن:", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
-        return EDIT_VALUE
-    else:
-        await update.message.reply_text("گزینه نامعتبر!", reply_markup=main_menu())
-        return ConversationHandler.END
-
-async def edit_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    my_id = update.effective_user.id
-    field = context.user_data.get("edit_field")
-    if field == "عکس":
-        if not update.message.photo:
-            await update.message.reply_text("لطفا عکس بفرست:")
-            return EDIT_VALUE
-        photo_id = update.message.photo[-1].file_id
-        await db_patch("users", f"telegram_id=eq.{my_id}", {"photo_id": photo_id})
-    elif field == "شهر":
-        await db_patch("users", f"telegram_id=eq.{my_id}", {"city": update.message.text})
-    elif field == "علایق":
-        await db_patch("users", f"telegram_id=eq.{my_id}", {"interests": update.message.text})
-    await update.message.reply_text("✅ پروفایل به‌روز شد!", reply_markup=main_menu())
-    return ConversationHandler.END
+            await update.message.reply_text(text, reply_markup=keyboard, parse_mode="HTML")
 
 async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     my_id = update.effective_user.id
@@ -1116,6 +1003,43 @@ async def invite(update: Update, context: ContextTypes.DEFAULT_TYPE):
     my_id = update.effective_user.id
     link = f"https://t.me/{BOT_USERNAME}?start=ref_{my_id}"
     await update.message.reply_text(f"لینک دعوت شما:\n{link}\n\nبه ازای هر دوست 5 سکه هدیه میگیرید!")
+
+async def send_dm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    to_id = context.user_data.get("dm_to")
+    if not to_id:
+        await update.message.reply_text("خطای فنی!", reply_markup=main_menu())
+        return ConversationHandler.END
+    from_id = update.effective_user.id
+    message_text = update.message.text
+    if not check_rate_limit(from_id):
+        await update.message.reply_text("پیام ها رو کمتر بفرستید!")
+        return ConversationHandler.END
+    result_analysis = await analyze_message(from_id, message_text)
+    if result_analysis == "toxic":
+        await update.message.reply_text("پیام شما نامناسب بود!", reply_markup=main_menu())
+        return ConversationHandler.END
+    from_coins = await get_coins(from_id)
+    is_paid = from_coins >= 1
+    if is_paid:
+        await deduct_coin(from_id)
+    result = await db_post("direct_messages", {"from_user": from_id, "to_user": to_id, "message": message_text, "is_paid": is_paid})
+    msg_id = result[0]["id"] if result and len(result) > 0 else None
+    from_profile = await db_get("users", f"telegram_id=eq.{from_id}")
+    if from_profile and msg_id:
+        u = from_profile[0]
+        vip_badge = "⭐ VIP | " if u.get("is_vip") else ""
+        voice_badge = get_voice_badge(u)
+        notif = f"📨 پیام خصوصی جدید!\n{voice_badge}{vip_badge}جنسیت: {u['gender']} | سن: {u['age']} | شهر: {u['city']}"
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("📩 خواندن پیام", callback_data=f"readdm_{msg_id}_{from_id}_{is_paid}")]])
+        try:
+            if u.get("photo_id"):
+                await context.bot.send_photo(chat_id=to_id, photo=u["photo_id"], caption=notif, reply_markup=kb)
+            else:
+                await context.bot.send_message(chat_id=to_id, text=notif, reply_markup=kb)
+        except:
+            pass
+    await update.message.reply_text("✅ پیام ارسال شد!", reply_markup=main_menu())
+    return ConversationHandler.END
 
 async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [["پسر", "دختر"]]
@@ -1159,8 +1083,10 @@ async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return PHOTO
     photo_id = update.message.photo[-1].file_id
     data = context.user_data
+    username = update.effective_user.username or ""
     await db_post("users", {
         "telegram_id": update.effective_user.id,
+        "username": username,
         "gender": data["gender"],
         "age": data["age"],
         "province": data["province"],
@@ -1185,7 +1111,8 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     TOKEN = "8992632783:AAEyc2COdSjBC3cWlSVvY-oG6AZMAcW3nq4"
     app = Application.builder().token(TOKEN).build()
-    conv = ConversationHandler(
+
+    register_conv = ConversationHandler(
         entry_points=[CommandHandler("register", register)],
         states={
             GENDER: [MessageHandler(filters.TEXT & ~filters.COMMAND, gender)],
@@ -1197,8 +1124,12 @@ def main():
         },
         fallbacks=[CommandHandler("cancel", cancel)]
     )
+
     search_conv = ConversationHandler(
-        entry_points=[CommandHandler("search", search)],
+        entry_points=[
+            CommandHandler("search", search_start),
+            MessageHandler(filters.Regex("جستجو"), search_start)
+        ],
         states={
             SEARCH_GENDER: [MessageHandler(filters.TEXT & ~filters.COMMAND, search_gender)],
             SEARCH_AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, search_age)],
@@ -1206,29 +1137,42 @@ def main():
         },
         fallbacks=[CommandHandler("cancel", cancel)]
     )
+
     edit_conv = ConversationHandler(
-        entry_points=[CommandHandler("edit", edit_profile)],
+        entry_points=[
+            CommandHandler("edit", edit_start),
+            MessageHandler(filters.Regex("ویرایش"), edit_start)
+        ],
         states={
             EDIT_CHOICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_choice)],
             EDIT_VALUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_value), MessageHandler(filters.PHOTO, edit_value)],
         },
         fallbacks=[CommandHandler("cancel", cancel)]
     )
+
     nearby_conv = ConversationHandler(
-        entry_points=[CommandHandler("nearby", nearby)],
+        entry_points=[
+            CommandHandler("nearby", nearby_start),
+            MessageHandler(filters.Regex("نزدیک"), nearby_start)
+        ],
         states={
             NEARBY_DISTANCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, nearby_distance)],
             NEARBY_LOCATION: [MessageHandler(filters.LOCATION, nearby_location)],
         },
         fallbacks=[CommandHandler("cancel", cancel)]
     )
+
     recent_conv = ConversationHandler(
-        entry_points=[CommandHandler("recent", recent_chats)],
+        entry_points=[
+            CommandHandler("recent", recent_start),
+            MessageHandler(filters.Regex("چت‌های اخیر"), recent_start)
+        ],
         states={
             RECENT_GENDER: [MessageHandler(filters.TEXT & ~filters.COMMAND, recent_gender)],
         },
         fallbacks=[CommandHandler("cancel", cancel)]
     )
+
     dm_conv = ConversationHandler(
         entry_points=[],
         states={
@@ -1236,13 +1180,15 @@ def main():
         },
         fallbacks=[CommandHandler("cancel", cancel)]
     )
+
     voice_conv = ConversationHandler(
         entry_points=[],
         states={
-            VOICE_UPLOAD: [MessageHandler(filters.VOICE, handle_voice_upload)],
+            VOICE_UPLOAD: [MessageHandler(filters.VOICE, handle_voice_in_chat)],
         },
         fallbacks=[CommandHandler("cancel", cancel)]
     )
+
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("profile", profile))
@@ -1252,11 +1198,11 @@ def main():
     app.add_handler(CommandHandler("invite", invite))
     app.add_handler(CommandHandler("sameage", same_age))
     app.add_handler(CommandHandler("endchat", end_chat_cmd))
-    app.add_handler(conv)
     app.add_handler(search_conv)
     app.add_handler(edit_conv)
     app.add_handler(nearby_conv)
     app.add_handler(recent_conv)
+    app.add_handler(register_conv)
     app.add_handler(dm_conv)
     app.add_handler(voice_conv)
     app.add_handler(CallbackQueryHandler(handle_like))
@@ -1268,7 +1214,7 @@ def main():
     app.add_handler(MessageHandler(filters.VIDEO_NOTE, forward_media))
     app.add_handler(MessageHandler(filters.Document.ALL, forward_media))
     app.add_handler(MessageHandler(filters.ANIMATION, forward_media))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, smart_menu_handler))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_handler))
     print("ربات شروع به کار کرد...")
     app.run_polling()
 
