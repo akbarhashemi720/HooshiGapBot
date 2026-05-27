@@ -59,10 +59,9 @@ BRAND_FOOTER = "⚡️ powered by HooshiGap AI"
 
 def main_menu():
     keyboard = [
-        ["💜 مرور پروفایل‌ها", "🔍 جستجوی پیشرفته"],
-        ["🎲 اتصال تصادفی", "👤 پروفایل من"],
-        ["💰 کیف پول", "🎁 دعوت دوستان"],
-        ["✏️ ویرایش پروفایل", "🎂 هم‌سن‌های من"],
+        ["🔍 جستجوی پیشرفته", "🎲 اتصال تصادفی"],
+        ["👤 پروفایل من", "💰 کیف پول"],
+        ["🎁 دعوت دوستان", "🎂 هم‌سن‌های من"],
         ["📍 افراد نزدیک", "💬 چت‌های اخیر"],
         ["🎤 ویس پروفایل"]
     ]
@@ -431,9 +430,7 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if handled:
         return
 
-    if "مرور پروفایل" in text:
-        await browse(update, context)
-    elif "اتصال تصادفی" in text:
+    if "اتصال تصادفی" in text:
         await random_user(update, context)
     elif "پروفایل من" in text:
         await profile(update, context)
@@ -614,6 +611,17 @@ async def recent_gender(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+
+    if query.data == "edit_profile_btn":
+        from_id = update.effective_user.id
+        keyboard = [["🏙 شهر", "✨ علایق"], ["📸 عکس", "🔙 بازگشت"]]
+        await context.bot.send_message(
+            chat_id=from_id,
+            text=f"✏️ ویرایش پروفایل\n{BRAND_SEPARATOR}\nچی رو میخوای ویرایش کنی؟",
+            reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+        )
+        context.user_data["in_edit"] = True
+        return
 
     if query.data == "admin_users":
         from_id = update.effective_user.id
@@ -1065,10 +1073,13 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💜 امتیاز اعتماد: {trust_score}/100\n"
         f"{BRAND_SEPARATOR}"
     )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✏️ ویرایش پروفایل", callback_data="edit_profile_btn")]
+    ])
     if user.get("photo_id"):
-        await update.message.reply_photo(photo=user["photo_id"], caption=text)
+        await update.message.reply_photo(photo=user["photo_id"], caption=text, reply_markup=keyboard)
     else:
-        await update.message.reply_text(text)
+        await update.message.reply_text(text, reply_markup=keyboard)
 
 async def invite(update: Update, context: ContextTypes.DEFAULT_TYPE):
     my_id = update.effective_user.id
@@ -1161,7 +1172,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 def main():
-    TOKEN = "8992632783:AAEeNhLsNp0jL6_i3zUHfxO-EMyrJbTIpl4"
+    TOKEN = "8992632783:AAEyc2COdSjBC3cWlSVvY-oG6AZMAcW3nq4"
     app = Application.builder().token(TOKEN).build()
 
     register_conv = ConversationHandler(
