@@ -1,1 +1,0 @@
-# HooshiGap Moderation Engine
