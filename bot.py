@@ -1200,7 +1200,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 def main():
-    TOKEN = "8992632783:AAH6eRVeAtKHXhTsILHCxXdp8er9vH8gvbk"
+    TOKEN = "8992632783:AAFgGxO5ftOwBjvRSII0E7jYXSsKCEXBof8"
     app = Application.builder().token(TOKEN).build()
 
     register_conv = ConversationHandler(
