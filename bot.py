@@ -39,7 +39,7 @@ threading.Thread(target=run_server, daemon=True).start()
 BOT_USERNAME = "HooshiGapBot"
 ADMIN_IDS = [7049305054]
 
-GENDER, AGE, PROVINCE, CITY, INTERESTS, PHOTO = range(6)
+NAME, GENDER, AGE, PROVINCE, CITY, INTERESTS, PHOTO = range(7)
 SEARCH_GENDER, SEARCH_AGE, SEARCH_PROVINCE = range(6, 9)
 EDIT_CHOICE, EDIT_VALUE = range(9, 11)
 NEARBY_DISTANCE, NEARBY_LOCATION = range(11, 13)
@@ -78,16 +78,21 @@ def format_profile_card(user, extra="", show_link=True):
     user_link = get_user_link(user) if show_link else ""
     gender_emoji = "👦" if user.get("gender") == "پسر" else "👧"
     username = user.get("username", "")
-    name_line = f"👤 @{username}\n" if username else ""
+    display_name = user.get("display_name", "")
+    name_line = f"✨ {display_name}\n" if display_name else ""
+    username_line = f"👤 @{username}\n" if username else ""
     online_status = "🟢 آنلاین" if user.get("is_online") else "⚫️ آفلاین"
+    like_count = user.get("like_count", 0)
     text = (
         f"{vip_badge}{voice_badge}\n"
         f"{BRAND_SEPARATOR}\n"
         f"{name_line}"
+        f"{username_line}"
         f"{gender_emoji} جنسیت: {user.get('gender', '-')}\n"
         f"🎂 سن: {user.get('age', '-')}\n"
         f"🏙 شهر: {user.get('city', '-')}\n"
         f"📡 وضعیت: {online_status}\n"
+        f"❤️ لایک: {like_count}\n"
         f"{BRAND_SEPARATOR}"
     )
     if show_link and user_link:
@@ -163,6 +168,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     pass
     if await user_exists(my_id):
         await update_username(my_id, username)
+        from datetime import datetime
+        await update_user(my_id, {"last_seen": datetime.utcnow().isoformat(), "is_online": True})
         await update.message.reply_text(
             f"💜 خوش برگشتی به هوشی‌گپ!\n"
             f"{BRAND_SEPARATOR}\n"
@@ -916,6 +923,11 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
     to_id = int(query.data.split("_")[1])
     from_id = update.effective_user.id
     await like_user(from_id, to_id)
+    # افزایش تعداد لایک
+    to_user = await get_user(to_id)
+    if to_user:
+        current_likes = to_user.get("like_count", 0)
+        await update_user(to_id, {"like_count": current_likes + 1})
     is_match = await check_mutual_like(from_id, to_id)
     if is_match:
         await context.bot.send_message(
@@ -1059,16 +1071,21 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         label = get_voice_label(mode)
         voice_info = f"🎤 {label}\n"
     gender_emoji = "👦" if user.get("gender") == "پسر" else "👧"
+    display_name = user.get("display_name", "")
+    like_count = user.get("like_count", 0)
+    name_line = f"✨ {display_name}\n" if display_name else ""
     text = (
         f"💜 پروفایل من\n"
         f"{BRAND_SEPARATOR}\n"
         f"{vip_badge}{voice_info}"
+        f"{name_line}"
         f"🆔 آیدی: {my_id}\n"
         f"{gender_emoji} جنسیت: {user['gender']}\n"
         f"🎂 سن: {user['age']}\n"
         f"🗺 استان: {user['province']}\n"
         f"🏙 شهر: {user['city']}\n"
         f"✨ علایق: {user['interests']}\n"
+        f"❤️ لایک: {like_count}\n"
         f"🪙 سکه: {coins}\n"
         f"💜 امتیاز اعتماد: {trust_score}/100\n"
         f"{BRAND_SEPARATOR}"
@@ -1094,10 +1111,18 @@ async def invite(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [["👦 پسر", "👧 دختر"]]
     await update.message.reply_text(
         f"💜 ثبت‌نام در هوشی‌گپ\n"
         f"{BRAND_SEPARATOR}\n"
+        f"اسمت چیه؟ (نام مستعار)",
+        reply_markup=ReplyKeyboardRemove()
+    )
+    return NAME
+
+async def name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["display_name"] = update.message.text
+    keyboard = [["👦 پسر", "👧 دختر"]]
+    await update.message.reply_text(
         f"جنسیت شما؟",
         reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     )
@@ -1156,6 +1181,9 @@ async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data["gender"], data["age"], data["province"],
         data["city"], data["interests"], photo_id
     )
+    display_name = data.get("display_name", "")
+    if display_name:
+        await update_user(update.effective_user.id, {"display_name": display_name})
     await update.message.reply_text(
         f"💜 ثبت‌نام کامل شد!\n"
         f"{BRAND_SEPARATOR}\n"
@@ -1178,6 +1206,7 @@ def main():
     register_conv = ConversationHandler(
         entry_points=[CommandHandler("register", register)],
         states={
+            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, name)],
             GENDER: [MessageHandler(filters.TEXT & ~filters.COMMAND, gender)],
             AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, age)],
             PROVINCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, province)],
