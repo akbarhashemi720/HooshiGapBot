@@ -77,16 +77,18 @@ def format_profile_card(user, extra="", show_link=True):
     vip_badge = "⭐️ VIP  " if user.get("is_vip") else ""
     voice_badge = get_voice_badge(user)
     user_link = get_user_link(user) if show_link else ""
-
     gender_emoji = "👦" if user.get("gender") == "پسر" else "👧"
-    
+    username = user.get("username", "")
+    name_line = f"👤 @{username}\n" if username else ""
+    online_status = "🟢 آنلاین" if user.get("is_online") else "⚫️ آفلاین"
     text = (
         f"{vip_badge}{voice_badge}\n"
         f"{BRAND_SEPARATOR}\n"
+        f"{name_line}"
         f"{gender_emoji} جنسیت: {user.get('gender', '-')}\n"
         f"🎂 سن: {user.get('age', '-')}\n"
         f"🏙 شهر: {user.get('city', '-')}\n"
-        f"✨ علایق: {user.get('interests', '-')}\n"
+        f"📡 وضعیت: {online_status}\n"
         f"{BRAND_SEPARATOR}"
     )
     if show_link and user_link:
@@ -99,10 +101,10 @@ def user_action_keyboard(user_id):
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("💜 لایک", callback_data=f"like_{user_id}"),
          InlineKeyboardButton("⏭ بعدی", callback_data="skip")],
-        [InlineKeyboardButton("💬 چت", callback_data=f"chatreq_{user_id}"),
-         InlineKeyboardButton("📨 پیام", callback_data=f"dm_{user_id}")],
-        [InlineKeyboardButton("🚫 بلاک", callback_data=f"block_{user_id}"),
-         InlineKeyboardButton("⚠️ گزارش", callback_data=f"report_{user_id}")]
+        [InlineKeyboardButton("💬 درخواست چت", callback_data=f"chatreq_{user_id}")],
+        [InlineKeyboardButton("📨 پیام دایرکت", callback_data=f"dm_{user_id}")],
+        [InlineKeyboardButton("🚫 بلاک کاربر", callback_data=f"block_{user_id}"),
+         InlineKeyboardButton("🚨 گزارش", callback_data=f"report_{user_id}")]
     ])
 
 async def send_user_card(update, user, extra=""):
@@ -1002,7 +1004,7 @@ async def browse(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     user = users[0]
     await deduct_coin(my_id)
-    await send_user_card(update, user, f"🪙 سکه باقی: {coins-1}")
+    await send_user_card(update, user)
     if user.get("has_voice"):
         await send_voice_profile(context.bot, my_id, user, is_matched=False)
 
