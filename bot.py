@@ -1,3 +1,4 @@
+import os
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton, KeyboardButton
 from telegram.ext import Application, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, CallbackQueryHandler, filters
 import threading
@@ -1457,7 +1458,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 def main():
-    TOKEN = "8992632783:AAG6ybX4bXb1j_rVtTydcUNgs9k3Xf-IyLY"
+    TOKEN = os.environ.get("BOT_TOKEN", "")
     app = Application.builder().token(TOKEN).build()
 
     register_conv = ConversationHandler(
