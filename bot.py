@@ -5,8 +5,11 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 
 from core import (
     get_user, user_exists, create_user, update_user, update_username,
+    update_last_seen, get_online_status_text,
     ban_user, unban_user, is_banned, get_all_users, get_recent_users,
     get_user_stats, get_user_link,
+    get_users_by_province, get_users_by_age, get_new_users,
+    get_popular_users, get_users_without_chat, db_get,
     get_coins, add_coins, deduct_coin, has_enough_coins, is_vip, referral_reward,
     get_trust, update_trust, shadowban, remove_shadowban, is_shadowbanned,
     report_penalty, block_penalty, complete_chat_reward, warn_user, log_moderation,
@@ -46,6 +49,9 @@ NEARBY_DISTANCE, NEARBY_LOCATION = range(11, 13)
 RECENT_GENDER = 13
 DM_WRITE = 14
 VOICE_UPLOAD = 15
+SEARCH_TYPE = 17
+SEARCH_GENDER_NEW = 18
+SEARCH_PAGE = 19
 
 # ═══════════════════════════════════════
 # 🎨 برند هوشی‌گپ — هویت بصری
@@ -59,9 +65,9 @@ BRAND_FOOTER = "⚡️ powered by HooshiGap AI"
 
 def main_menu():
     keyboard = [
-        ["🔍 جستجوی پیشرفته", "🎲 اتصال تصادفی"],
-        ["👤 پروفایل من", "💰 کیف پول"],
-        ["🎁 دعوت دوستان", "🎂 هم‌سن‌های من"],
+        ["🔍 جستجو", "🔎 جستجوی پیشرفته"],
+        ["🎲 اتصال تصادفی", "👤 پروفایل من"],
+        ["💰 کیف پول", "🎁 دعوت دوستان"],
         ["📍 افراد نزدیک", "💬 چت‌های اخیر"],
         ["🎤 ویس پروفایل"]
     ]
@@ -81,7 +87,7 @@ def format_profile_card(user, extra="", show_link=True):
     display_name = user.get("display_name", "")
     name_line = f"✨ {display_name}\n" if display_name else ""
     username_line = f"👤 @{username}\n" if username else ""
-    online_status = "🟢 آنلاین" if user.get("is_online") else "⚫️ آفلاین"
+    online_status = get_online_status_text(user)
     like_count = user.get("like_count", 0)
     text = (
         f"{vip_badge}{voice_badge}\n"
@@ -168,8 +174,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     pass
     if await user_exists(my_id):
         await update_username(my_id, username)
-        from datetime import datetime
-        await update_user(my_id, {"last_seen": datetime.utcnow().isoformat(), "is_online": True})
+        await update_last_seen(my_id)
         await update.message.reply_text(
             f"💜 خوش برگشتی به هوشی‌گپ!\n"
             f"{BRAND_SEPARATOR}\n"
@@ -420,6 +425,7 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if is_in_chat(my_id):
         partner_id = get_partner(my_id)
+        await update_last_seen(my_id)
         if not check_rate_limit(my_id):
             await update.message.reply_text("⚠️ پیام‌ها رو کمتر بفرستید!")
             return
@@ -437,7 +443,9 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if handled:
         return
 
-    if "اتصال تصادفی" in text:
+    if "جستجو" in text and "پیشرفته" not in text:
+        return await new_search(update, context)
+    elif "اتصال تصادفی" in text:
         await random_user(update, context)
     elif "پروفایل من" in text:
         await profile(update, context)
@@ -449,6 +457,109 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await same_age(update, context)
     elif "ویس پروفایل" in text:
         await voice_profile_menu(update, context)
+
+async def new_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """منوی جستجوی جدید"""
+    keyboard = [
+        ["🏘 هم استانی‌ها", "🎂 هم سن‌ها"],
+        ["🆕 کاربران جدید", "💬 بدون چت‌ها"],
+        ["❤️ کاربران محبوب", "🔙 بازگشت"]
+    ]
+    await update.message.reply_text(
+        f"🔍 جستجو
+{BRAND_SEPARATOR}
+چه کسایی رو نشونت بدم؟",
+        reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+    )
+    return SEARCH_TYPE
+
+async def search_type_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """هندل کردن نوع جستجو"""
+    search_type = update.message.text
+    context.user_data["search_type"] = search_type
+
+    if "بازگشت" in search_type:
+        await update.message.reply_text("↩️ لغو شد.", reply_markup=main_menu())
+        return ConversationHandler.END
+
+    keyboard = [["👦 پسر", "👧 دختر", "👥 همه"]]
+    await update.message.reply_text(
+        "جنسیت مورد نظر؟",
+        reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+    )
+    return SEARCH_GENDER_NEW
+
+async def search_gender_new_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """هندل کردن جنسیت در جستجوی جدید"""
+    gender_text = update.message.text
+    gender = None
+    if "پسر" in gender_text:
+        gender = "پسر"
+    elif "دختر" in gender_text:
+        gender = "دختر"
+
+    context.user_data["search_gender_new"] = gender
+    my_id = update.effective_user.id
+    search_type = context.user_data.get("search_type", "")
+
+    users = []
+
+    if "هم استانی" in search_type:
+        my_profile = await get_user(my_id)
+        if my_profile:
+            users = await get_users_by_province(my_profile["province"], gender, limit=50)
+    elif "هم سن" in search_type:
+        my_profile = await get_user(my_id)
+        if my_profile:
+            users = await get_users_by_age(my_profile["age"], gender, limit=50)
+    elif "کاربران جدید" in search_type:
+        users = await get_new_users(gender, limit=50)
+    elif "بدون چت" in search_type:
+        users = await get_users_without_chat(my_id, gender, limit=50)
+    elif "محبوب" in search_type:
+        users = await get_popular_users(gender, limit=50)
+
+    # فیلتر کاربر خودش
+    users = [u for u in users if u.get("telegram_id") != my_id]
+
+    if not users:
+        await update.message.reply_text("😔 کسی پیدا نشد!", reply_markup=main_menu())
+        return ConversationHandler.END
+
+    # ذخیره لیست کاربران
+    context.user_data["search_results"] = users
+    context.user_data["search_page"] = 0
+
+    await show_search_page(update, context)
+    return ConversationHandler.END
+
+async def show_search_page(update, context):
+    """نمایش صفحه‌بندی نتایج جستجو"""
+    users = context.user_data.get("search_results", [])
+    page = context.user_data.get("search_page", 0)
+    per_page = 10
+    start = page * per_page
+    end = start + per_page
+    page_users = users[start:end]
+
+    if not page_users:
+        await update.message.reply_text("📄 صفحه دیگه‌ای وجود نداره!", reply_markup=main_menu())
+        return
+
+    total_pages = (len(users) + per_page - 1) // per_page
+    await update.message.reply_text(
+        f"📄 صفحه {page+1} از {total_pages} — {len(users)} نفر پیدا شد",
+        reply_markup=main_menu()
+    )
+
+    for user in page_users:
+        await send_user_card(update, user)
+
+    if end < len(users):
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton("⏭ صفحه بعد", callback_data=f"search_next_{page+1}")
+        ]])
+        await update.message.reply_text("برای دیدن بیشتر:", reply_markup=keyboard)
 
 async def search_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [["پسر", "دختر", "هر دو"]]
@@ -800,6 +911,16 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text=f"📨 پیام خصوصی:\n{BRAND_SEPARATOR}\n{dm_text}",
             reply_markup=kb
         )
+        return
+
+    if query.data.startswith("search_next_"):
+        page = int(query.data.split("_")[2])
+        context.user_data["search_page"] = page
+        try:
+            await query.edit_message_reply_markup(reply_markup=None)
+        except:
+            pass
+        await show_search_page(update, context)
         return
 
     if query.data == "skip":
@@ -1200,7 +1321,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 def main():
-    TOKEN = "8992632783:AAG6ybX4bXb1j_rVtTydcUNgs9k3Xf-IyLY"
+    TOKEN = "8992632783:AAFgGxO5ftOwBjvRSII0E7jYXSsKCEXBof8"
     app = Application.builder().token(TOKEN).build()
 
     register_conv = ConversationHandler(
@@ -1282,6 +1403,17 @@ def main():
     app.add_handler(CommandHandler("invite", invite))
     app.add_handler(CommandHandler("sameage", same_age))
     app.add_handler(CommandHandler("endchat", end_chat_cmd))
+    new_search_conv = ConversationHandler(
+        entry_points=[
+            MessageHandler(filters.Regex("^🔍 جستجو$"), new_search)
+        ],
+        states={
+            SEARCH_TYPE: [MessageHandler(filters.TEXT & ~filters.COMMAND, search_type_handler)],
+            SEARCH_GENDER_NEW: [MessageHandler(filters.TEXT & ~filters.COMMAND, search_gender_new_handler)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)]
+    )
+    app.add_handler(new_search_conv)
     app.add_handler(search_conv)
     app.add_handler(edit_conv)
     app.add_handler(nearby_conv)
