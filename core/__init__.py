@@ -31,7 +31,13 @@ from core.coins import (
     has_enough_coins,
     is_vip,
     set_vip,
-    referral_reward
+    buy_vip_with_coins,
+    get_vip_broadcast_status,
+    use_vip_broadcast_chat,
+    use_vip_broadcast_dm,
+    referral_reward,
+    VIP_PRICE_COINS,
+    VIP_PRICE_TOMAN
 )
 
 from core.trust import (
@@ -108,9 +114,12 @@ __all__ = [
     "get_users_by_province", "get_users_by_age",
     "get_new_users", "get_popular_users", "get_users_without_chat",
     "get_user_link", "db_get",
-    # coins
+    # coins & vip
     "get_coins", "add_coins", "deduct_coin", "has_enough_coins",
-    "is_vip", "set_vip", "referral_reward",
+    "is_vip", "set_vip", "buy_vip_with_coins",
+    "get_vip_broadcast_status", "use_vip_broadcast_chat",
+    "use_vip_broadcast_dm", "referral_reward",
+    "VIP_PRICE_COINS", "VIP_PRICE_TOMAN",
     # trust
     "get_trust", "update_trust", "shadowban", "remove_shadowban",
     "is_shadowbanned", "get_shadowban_level", "report_penalty",
