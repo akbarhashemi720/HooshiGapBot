@@ -466,9 +466,7 @@ async def new_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ["❤️ کاربران محبوب", "🔙 بازگشت"]
     ]
     await update.message.reply_text(
-        f"🔍 جستجو
-{BRAND_SEPARATOR}
-چه کسایی رو نشونت بدم؟",
+        f"🔍 جستجو\n{BRAND_SEPARATOR}\nچه کسایی رو نشونت بدم؟",
         reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     )
     return SEARCH_TYPE
