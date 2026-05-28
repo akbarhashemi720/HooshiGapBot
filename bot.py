@@ -111,18 +111,22 @@ def format_profile_card(user, extra="", show_link=True):
         text += f"\n{extra}"
     return text
 
-def user_action_keyboard(user_id):
+def user_action_keyboard(user_id, like_count=0):
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("💜 لایک", callback_data=f"like_{user_id}")],
-        [InlineKeyboardButton("💬 درخواست چت", callback_data=f"chatreq_{user_id}")],
-        [InlineKeyboardButton("📨 پیام دایرکت", callback_data=f"dm_{user_id}")],
+        [InlineKeyboardButton(f"💜 {like_count} لایک", callback_data=f"like_{user_id}")],
+        [InlineKeyboardButton("🎁 خرید سکه برای کاربر", callback_data=f"gift_coins_{user_id}")],
+        [InlineKeyboardButton("💬 درخواست چت", callback_data=f"chatreq_{user_id}"),
+         InlineKeyboardButton("📨 پیام دایرکت", callback_data=f"dm_{user_id}")],
         [InlineKeyboardButton("🚫 بلاک کاربر", callback_data=f"block_{user_id}"),
-         InlineKeyboardButton("🚨 گزارش", callback_data=f"report_{user_id}")]
+         InlineKeyboardButton("🚨 گزارش کاربر", callback_data=f"report_{user_id}")],
+        [InlineKeyboardButton("➕ افزودن به مخاطبین", callback_data=f"add_contact_{user_id}")],
+        [InlineKeyboardButton("🔔 اطلاع از آنلاین شدن", callback_data=f"notify_online_{user_id}")]
     ])
 
 async def send_user_card(update, user, extra=""):
     text = format_profile_card(user, extra)
-    keyboard = user_action_keyboard(user["telegram_id"])
+    like_count = user.get("like_count", 0)
+    keyboard = user_action_keyboard(user["telegram_id"], like_count)
     if user.get("photo_id"):
         await update.message.reply_photo(
             photo=user["photo_id"], caption=text,
@@ -1196,6 +1200,72 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
         return
 
+    if query.data.startswith("gift_coins_"):
+        to_id = int(query.data.split("_")[2])
+        from_id = update.effective_user.id
+        coins = await get_coins(from_id)
+        if coins < 5:
+            await query.answer("❌ حداقل ۵ سکه نیاز داری!", show_alert=True)
+            return
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🎁 هدیه ۵ سکه", callback_data=f"do_gift_5_{to_id}")],
+            [InlineKeyboardButton("🎁 هدیه ۱۰ سکه", callback_data=f"do_gift_10_{to_id}")],
+            [InlineKeyboardButton("🎁 هدیه ۲۰ سکه", callback_data=f"do_gift_20_{to_id}")],
+            [InlineKeyboardButton("❌ انصراف", callback_data="cancel_gift")]
+        ])
+        await context.bot.send_message(chat_id=from_id, text=f"🎁 چند سکه هدیه بدی?\n🪙 سکه فعلی شما: {coins}", reply_markup=keyboard)
+        return
+
+    if query.data.startswith("do_gift_"):
+        parts = query.data.split("_")
+        amount = int(parts[2])
+        to_id = int(parts[3])
+        from_id = update.effective_user.id
+        coins = await get_coins(from_id)
+        if coins < amount:
+            await query.answer(f"❌ سکه کافی نداری! داری: {coins}", show_alert=True)
+            return
+        await add_coins(from_id, -amount)
+        await add_coins(to_id, amount)
+        await context.bot.send_message(chat_id=from_id, text=f"✅ {amount} سکه هدیه دادی!")
+        try:
+            await context.bot.send_message(chat_id=to_id, text=f"🎁 {amount} سکه هدیه گرفتی از یه کاربر هوشی‌گپ!")
+        except:
+            pass
+        return
+
+    if query.data == "cancel_gift":
+        try:
+            await query.edit_message_reply_markup(reply_markup=None)
+        except:
+            pass
+        return
+
+    if query.data.startswith("add_contact_"):
+        to_id = int(query.data.split("_")[2])
+        from_id = update.effective_user.id
+        from core.users import db_post as users_db_post
+        import httpx
+        headers = {"apikey": "sb_publishable_DBlfUH3YcVEsCJ2m-3tOWg_nJNMBh5R", "Authorization": f"Bearer sb_publishable_DBlfUH3YcVEsCJ2m-3tOWg_nJNMBh5R", "Content-Type": "application/json"}
+        async with httpx.AsyncClient() as client:
+            await client.post("https://ahjdziimhlpynvvwhgiz.supabase.co/rest/v1/contacts", json={"user_id": from_id, "contact_id": to_id}, headers=headers)
+        await query.answer("✅ به مخاطبین اضافه شد!", show_alert=True)
+        try:
+            await context.bot.send_message(chat_id=to_id, text="➕ یک نفر شما را به مخاطبین اضافه کرد!")
+        except:
+            pass
+        return
+
+    if query.data.startswith("notify_online_"):
+        to_id = int(query.data.split("_")[2])
+        from_id = update.effective_user.id
+        import httpx
+        headers = {"apikey": "sb_publishable_DBlfUH3YcVEsCJ2m-3tOWg_nJNMBh5R", "Authorization": f"Bearer sb_publishable_DBlfUH3YcVEsCJ2m-3tOWg_nJNMBh5R", "Content-Type": "application/json"}
+        async with httpx.AsyncClient() as client:
+            await client.post("https://ahjdziimhlpynvvwhgiz.supabase.co/rest/v1/online_notifications", json={"user_id": from_id, "target_id": to_id}, headers=headers)
+        await query.answer("🔔 وقتی آنلاین شد بهت خبر می‌دیم!", show_alert=True)
+        return
+
     if query.data.startswith("block_"):
         to_id = int(query.data.split("_")[1])
         from_id = update.effective_user.id
@@ -1301,12 +1371,25 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     to_id = int(query.data.split("_")[1])
     from_id = update.effective_user.id
+
+    # چک کردن سکه کافی
+    from_coins = await get_coins(from_id)
+    if from_coins <= 0:
+        await query.answer("❌ سکه کافی نداری! برای لایک کردن ۱ سکه نیاز داری.", show_alert=True)
+        return
+
+    # کم کردن یه سکه از لایک کننده
+    await deduct_coin(from_id)
+
     await like_user(from_id, to_id)
-    # افزایش تعداد لایک
+
+    # افزایش تعداد لایک و اضافه کردن یه سکه به لایک شونده
     to_user = await get_user(to_id)
     if to_user:
         current_likes = to_user.get("like_count", 0)
         await update_user(to_id, {"like_count": current_likes + 1})
+        await add_coins(to_id, 1)
+
     is_match = await check_mutual_like(from_id, to_id)
     if is_match:
         await context.bot.send_message(
@@ -1321,9 +1404,9 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
     else:
-        await context.bot.send_message(chat_id=from_id, text="💜 لایک ثبت شد!")
+        await context.bot.send_message(chat_id=from_id, text=f"💜 لایک ثبت شد!\n🪙 سکه باقی: {from_coins-1}")
         try:
-            await context.bot.send_message(chat_id=to_id, text="💜 یک نفر به پروفایلت علاقه نشون داد!")
+            await context.bot.send_message(chat_id=to_id, text="💜 یک نفر به پروفایلت لایک داد!\n🪙 ۱ سکه هدیه گرفتی!")
         except:
             pass
 
