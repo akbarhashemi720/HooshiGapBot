@@ -609,7 +609,12 @@ async def search_province(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def edit_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [["🏙 شهر", "✨ علایق"], ["📸 عکس", "🔙 بازگشت"]]
+    keyboard = [
+        ["🏙 شهر", "✨ علایق"],
+        ["📸 عکس", "👤 اسم"],
+        ["⚧ جنسیت", "🎂 سن"],
+        ["📍 موقعیت GPS", "🔙 بازگشت"]
+    ]
     await update.message.reply_text(
         f"✏️ ویرایش پروفایل\n{BRAND_SEPARATOR}\nچی رو میخوای ویرایش کنی؟",
         reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
@@ -618,14 +623,13 @@ async def edit_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def edit_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     choice = update.message.text
-    context.user_data["edit_field"] = choice
-    if "عکس" in choice:
+    if "بازگشت" in choice:
+        await update.message.reply_text("↩️ لغو شد.", reply_markup=main_menu())
+        return ConversationHandler.END
+    elif "عکس" in choice:
         context.user_data["edit_field"] = "عکس"
         await update.message.reply_text("📸 عکس جدید بفرست:", reply_markup=ReplyKeyboardRemove())
         return EDIT_VALUE
-    elif "بازگشت" in choice:
-        await update.message.reply_text("↩️ لغو شد.", reply_markup=main_menu())
-        return ConversationHandler.END
     elif "شهر" in choice:
         context.user_data["edit_field"] = "شهر"
         await update.message.reply_text("🏙 شهر جدید بنویس:", reply_markup=ReplyKeyboardRemove())
@@ -634,6 +638,25 @@ async def edit_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["edit_field"] = "علایق"
         keyboard = [["موسیقی", "هنر", "کتاب"], ["ورزش", "بازی", "غذا"], ["سفر", "فیلم", "تکنولوژی"]]
         await update.message.reply_text("✨ علایق جدید رو انتخاب کن:", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
+        return EDIT_VALUE
+    elif "اسم" in choice:
+        context.user_data["edit_field"] = "اسم"
+        await update.message.reply_text("👤 اسم مستعار جدید بنویس:", reply_markup=ReplyKeyboardRemove())
+        return EDIT_VALUE
+    elif "جنسیت" in choice:
+        context.user_data["edit_field"] = "جنسیت"
+        keyboard = [["👦 پسر", "👧 دختر"]]
+        await update.message.reply_text("⚧ جنسیت جدید:", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
+        return EDIT_VALUE
+    elif "سن" in choice:
+        context.user_data["edit_field"] = "سن"
+        await update.message.reply_text("🎂 سن جدید بنویس (حداقل ۱۸):", reply_markup=ReplyKeyboardRemove())
+        return EDIT_VALUE
+    elif "GPS" in choice or "موقعیت" in choice:
+        context.user_data["edit_field"] = "gps"
+        location_button = KeyboardButton("📍 ارسال موقعیت", request_location=True)
+        keyboard = ReplyKeyboardMarkup([[location_button]], one_time_keyboard=True, resize_keyboard=True)
+        await update.message.reply_text("📍 موقعیت جدیدت رو بفرست:", reply_markup=keyboard)
         return EDIT_VALUE
     else:
         await update.message.reply_text("❌ گزینه نامعتبر!", reply_markup=main_menu())
@@ -651,7 +674,30 @@ async def edit_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif field == "شهر":
         await update_user(my_id, {"city": update.message.text})
     elif field == "علایق":
-        await update_user(my_id, {"interests": update.message.text})
+        text = update.message.text
+        for emoji in ["🎵 ", "🎨 ", "📚 ", "⚽ ", "🎮 ", "🍕 ", "✈️ ", "🎬 ", "💻 "]:
+            text = text.replace(emoji, "")
+        await update_user(my_id, {"interests": text})
+    elif field == "اسم":
+        await update_user(my_id, {"display_name": update.message.text})
+    elif field == "جنسیت":
+        text = update.message.text.replace("👦 ", "").replace("👧 ", "")
+        await update_user(my_id, {"gender": text})
+    elif field == "سن":
+        text = update.message.text
+        if not text.isdigit() or int(text) < 18:
+            await update.message.reply_text("❌ سن باید حداقل ۱۸ باشه:")
+            return EDIT_VALUE
+        await update_user(my_id, {"age": int(text)})
+    elif field == "gps":
+        if not update.message.location:
+            location_button = KeyboardButton("📍 ارسال موقعیت", request_location=True)
+            keyboard = ReplyKeyboardMarkup([[location_button]], one_time_keyboard=True, resize_keyboard=True)
+            await update.message.reply_text("📍 لطفا موقعیتت رو بفرست:", reply_markup=keyboard)
+            return EDIT_VALUE
+        lat = update.message.location.latitude
+        lon = update.message.location.longitude
+        await update_user_location(my_id, lat, lon)
     await update.message.reply_text(
         f"✅ پروفایل به‌روز شد!\n💜 هوشی‌گپ AI پروفایلت رو بهینه کرد.",
         reply_markup=main_menu()
@@ -730,13 +776,19 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "edit_profile_btn":
         from_id = update.effective_user.id
-        keyboard = [["🏙 شهر", "✨ علایق"], ["📸 عکس", "🔙 بازگشت"]]
+        keyboard = [
+            ["🏙 شهر", "✨ علایق"],
+            ["📸 عکس", "👤 اسم"],
+            ["⚧ جنسیت", "🎂 سن"],
+            ["📍 موقعیت GPS", "🔙 بازگشت"]
+        ]
         await context.bot.send_message(
             chat_id=from_id,
             text=f"✏️ ویرایش پروفایل\n{BRAND_SEPARATOR}\nچی رو میخوای ویرایش کنی؟",
             reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
         )
-        context.user_data["in_edit"] = True
+        context.user_data["edit_field"] = None
+        context.user_data["waiting_edit"] = True
         return
 
     if query.data == "admin_users":
@@ -1356,7 +1408,11 @@ def main():
         ],
         states={
             EDIT_CHOICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_choice)],
-            EDIT_VALUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_value), MessageHandler(filters.PHOTO, edit_value)],
+            EDIT_VALUE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_value),
+                MessageHandler(filters.PHOTO, edit_value),
+                MessageHandler(filters.LOCATION, edit_value)
+            ],
         },
         fallbacks=[CommandHandler("cancel", cancel)]
     )
