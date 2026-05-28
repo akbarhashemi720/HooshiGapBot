@@ -113,7 +113,7 @@ def format_profile_card(user, extra="", show_link=True):
 
 def user_action_keyboard(user_id):
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("💜 لایک", callback_data=f"like_{user_id}"),
+        [InlineKeyboardButton("💜 لایک", callback_data=f"like_{user_id}")],
         [InlineKeyboardButton("💬 درخواست چت", callback_data=f"chatreq_{user_id}")],
         [InlineKeyboardButton("📨 پیام دایرکت", callback_data=f"dm_{user_id}")],
         [InlineKeyboardButton("🚫 بلاک کاربر", callback_data=f"block_{user_id}"),
