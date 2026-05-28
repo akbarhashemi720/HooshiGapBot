@@ -11,7 +11,10 @@ from core import (
     get_user_stats, get_user_link,
     get_users_by_province, get_users_by_age, get_new_users,
     get_popular_users, get_users_without_chat, db_get,
-    get_coins, add_coins, deduct_coin, has_enough_coins, is_vip, referral_reward,
+    get_coins, add_coins, deduct_coin, has_enough_coins, is_vip,
+    set_vip, buy_vip_with_coins, get_vip_broadcast_status,
+    use_vip_broadcast_chat, use_vip_broadcast_dm,
+    referral_reward, VIP_PRICE_COINS, VIP_PRICE_TOMAN,
     get_trust, update_trust, shadowban, remove_shadowban, is_shadowbanned,
     report_penalty, block_penalty, complete_chat_reward, warn_user, log_moderation,
     check_rate_limit, check_queue_limit, analyze_message,
@@ -458,6 +461,69 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     handled = await handle_admin_text(update, context)
     if handled:
         return
+
+    # هندل کردن VIP broadcast
+    if context.user_data.get("vip_action"):
+        vip_action = context.user_data.get("vip_action")
+        context.user_data["vip_action"] = None
+        
+        if vip_action == "broadcast_chat":
+            success, msg = await use_vip_broadcast_chat(my_id)
+            if not success:
+                await update.message.reply_text(msg, reply_markup=main_menu())
+                return
+            # ارسال درخواست چت به ۱۰ نفر آنلاین
+            candidates = await db_get("users", f"telegram_id=neq.{my_id}&is_banned=eq.false&shadowban_level=eq.0&order=last_seen.desc&limit=10")
+            sent = 0
+            my_profile = await get_user(my_id)
+            for u in candidates:
+                try:
+                    vip_badge = "⭐️ VIP | "
+                    gender_emoji = "👦" if my_profile.get("gender") == "پسر" else "👧"
+                    notif = (
+                        f"💬 درخواست چت VIP!\n{BRAND_SEPARATOR}\n"
+                        f"{vip_badge}{gender_emoji} {my_profile.get('gender')} | "
+                        f"🎂 {my_profile.get('age')} | "
+                        f"🏙 {my_profile.get('city')}"
+                    )
+                    kb = InlineKeyboardMarkup([[
+                        InlineKeyboardButton("✅ قبول", callback_data=f"accept_{my_id}"),
+                        InlineKeyboardButton("❌ رد", callback_data=f"reject_{my_id}")
+                    ]])
+                    await context.bot.send_message(chat_id=u["telegram_id"], text=notif, reply_markup=kb)
+                    sent += 1
+                except:
+                    pass
+            await update.message.reply_text(f"✅ درخواست چت به {sent} نفر ارسال شد!", reply_markup=main_menu())
+            return
+
+        elif vip_action == "broadcast_dm":
+            success, msg_status = await use_vip_broadcast_dm(my_id)
+            if not success:
+                await update.message.reply_text(msg_status, reply_markup=main_menu())
+                return
+            # ارسال پیام به ۱۰ نفر آنلاین
+            candidates = await db_get("users", f"telegram_id=neq.{my_id}&is_banned=eq.false&shadowban_level=eq.0&order=last_seen.desc&limit=10")
+            sent = 0
+            my_profile = await get_user(my_id)
+            for u in candidates:
+                try:
+                    vip_badge = "⭐️ VIP | "
+                    notif = (
+                        f"📨 پیام همگانی VIP\n{BRAND_SEPARATOR}\n"
+                        f"{vip_badge}{text}\n"
+                        f"از: {my_profile.get('gender')} | {my_profile.get('age')} | {my_profile.get('city')}"
+                    )
+                    kb = InlineKeyboardMarkup([[
+                        InlineKeyboardButton("💬 پاسخ", callback_data=f"chatreq_{my_id}"),
+                        InlineKeyboardButton("💜 لایک", callback_data=f"like_{my_id}")
+                    ]])
+                    await context.bot.send_message(chat_id=u["telegram_id"], text=notif, reply_markup=kb)
+                    sent += 1
+                except:
+                    pass
+            await update.message.reply_text(f"✅ پیام به {sent} نفر ارسال شد!", reply_markup=main_menu())
+            return
 
     # هندل کردن ویرایش پروفایل از دکمه پروفایل
     if context.user_data.get("waiting_edit"):
@@ -1004,17 +1070,73 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=update.effective_user.id, text="💳 خرید سکه به زودی فعال می‌شود!")
         return
 
+    if query.data == "buy_vip_coins":
+        from_id = update.effective_user.id
+        success, msg = await buy_vip_with_coins(from_id)
+        await context.bot.send_message(chat_id=from_id, text=msg, reply_markup=main_menu())
+        return
+
+    if query.data == "buy_vip_toman":
+        from_id = update.effective_user.id
+        await context.bot.send_message(
+            chat_id=from_id,
+            text=(
+                f"💳 خرید VIP\n{BRAND_SEPARATOR}\n"
+                f"قیمت: {VIP_PRICE_TOMAN:,} تومان\n\n"
+                f"برای خرید با پشتیبانی تماس بگیرید.\n"
+                f"بعد از پرداخت VIP فعال می‌شود."
+            )
+        )
+        return
+
+    if query.data == "vip_broadcast_chat":
+        from_id = update.effective_user.id
+        vip = await is_vip(from_id)
+        if not vip:
+            await query.answer("❌ VIP نیستید!", show_alert=True)
+            return
+        status = await get_vip_broadcast_status(from_id)
+        if status["chat_remaining"] <= 0:
+            await query.answer("❌ ظرفیت چت همگانی تمام شده!", show_alert=True)
+            return
+        context.user_data["vip_action"] = "broadcast_chat"
+        await context.bot.send_message(
+            chat_id=from_id,
+            text=f"💬 چت همگانی VIP\n{BRAND_SEPARATOR}\nپیام درخواست چت رو بنویس:\n({status['chat_remaining']} بار باقی)",
+            reply_markup=ReplyKeyboardRemove()
+        )
+        return
+
+    if query.data == "vip_broadcast_dm":
+        from_id = update.effective_user.id
+        vip = await is_vip(from_id)
+        if not vip:
+            await query.answer("❌ VIP نیستید!", show_alert=True)
+            return
+        status = await get_vip_broadcast_status(from_id)
+        if status["dm_remaining"] <= 0:
+            await query.answer("❌ ظرفیت پیام همگانی تمام شده!", show_alert=True)
+            return
+        context.user_data["vip_action"] = "broadcast_dm"
+        await context.bot.send_message(
+            chat_id=from_id,
+            text=f"📨 پیام همگانی VIP\n{BRAND_SEPARATOR}\nپیام دایرکت رو بنویس:\n({status['dm_remaining']} بار باقی)",
+            reply_markup=ReplyKeyboardRemove()
+        )
+        return
+
     if query.data == "coins_vip":
         await context.bot.send_message(
             chat_id=update.effective_user.id,
             text=(
                 f"👑 امکانات VIP\n{BRAND_SEPARATOR}\n"
-                f"⭐️ اول لیست جستجوها\n"
-                f"💜 نشان VIP روی پروفایل\n"
-                f"💬 درخواست چت به ۱۰ نفر\n"
-                f"📨 پیام دایرکت به ۱۰ نفر\n"
+                f"⭐️ نشان VIP روی پروفایل\n"
+                f"👑 اول لیست جستجوها\n"
+                f"💬 چت همگانی به ۱۰ نفر\n"
+                f"📨 پیام همگانی به ۱۰ نفر\n"
+                f"⏰ دائمی — بدون محدودیت زمانی\n"
                 f"{BRAND_SEPARATOR}\n"
-                f"به زودی فعال می‌شود!"
+                f"💰 {VIP_PRICE_TOMAN:,} تومان یا {VIP_PRICE_COINS:,} سکه"
             )
         )
         return
