@@ -282,7 +282,22 @@ async def end_chat_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def forward_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
     my_id = update.effective_user.id
     if not is_in_chat(my_id):
-        if update.message.photo:
+        if update.message.photo and context.user_data.get("waiting_edit_value") and context.user_data.get("edit_field") == "عکس":
+            photo_id = update.message.photo[-1].file_id
+            await update_user(my_id, {"photo_id": photo_id})
+            context.user_data["waiting_edit_value"] = False
+            context.user_data["waiting_edit"] = False
+            await update.message.reply_text("✅ عکس پروفایل به‌روز شد!", reply_markup=main_menu())
+            return
+        elif update.message.location and context.user_data.get("waiting_edit_value") and context.user_data.get("edit_field") == "gps":
+            lat = update.message.location.latitude
+            lon = update.message.location.longitude
+            await update_user_location(my_id, lat, lon)
+            context.user_data["waiting_edit_value"] = False
+            context.user_data["waiting_edit"] = False
+            await update.message.reply_text("✅ موقعیت به‌روز شد!", reply_markup=main_menu())
+            return
+        elif update.message.photo:
             await photo(update, context)
         return
     partner_id = get_partner(my_id)
@@ -441,6 +456,77 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     handled = await handle_admin_text(update, context)
     if handled:
+        return
+
+    # هندل کردن ویرایش پروفایل از دکمه پروفایل
+    if context.user_data.get("waiting_edit"):
+        choice = text
+        if "بازگشت" in choice:
+            context.user_data["waiting_edit"] = False
+            await update.message.reply_text("↩️ لغو شد.", reply_markup=main_menu())
+            return
+        elif "عکس" in choice:
+            context.user_data["edit_field"] = "عکس"
+            context.user_data["waiting_edit_value"] = True
+            await update.message.reply_text("📸 عکس جدید بفرست:", reply_markup=ReplyKeyboardRemove())
+            return
+        elif "شهر" in choice:
+            context.user_data["edit_field"] = "شهر"
+            context.user_data["waiting_edit_value"] = True
+            await update.message.reply_text("🏙 شهر جدید بنویس:", reply_markup=ReplyKeyboardRemove())
+            return
+        elif "علایق" in choice:
+            context.user_data["edit_field"] = "علایق"
+            context.user_data["waiting_edit_value"] = True
+            keyboard = [["موسیقی", "هنر", "کتاب"], ["ورزش", "بازی", "غذا"], ["سفر", "فیلم", "تکنولوژی"]]
+            await update.message.reply_text("✨ علایق جدید:", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
+            return
+        elif "اسم" in choice:
+            context.user_data["edit_field"] = "اسم"
+            context.user_data["waiting_edit_value"] = True
+            await update.message.reply_text("👤 اسم مستعار جدید:", reply_markup=ReplyKeyboardRemove())
+            return
+        elif "جنسیت" in choice:
+            context.user_data["edit_field"] = "جنسیت"
+            context.user_data["waiting_edit_value"] = True
+            keyboard = [["👦 پسر", "👧 دختر"]]
+            await update.message.reply_text("⚧ جنسیت جدید:", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
+            return
+        elif "سن" in choice:
+            context.user_data["edit_field"] = "سن"
+            context.user_data["waiting_edit_value"] = True
+            await update.message.reply_text("🎂 سن جدید (حداقل ۱۸):", reply_markup=ReplyKeyboardRemove())
+            return
+        elif "GPS" in choice or "موقعیت" in choice:
+            context.user_data["edit_field"] = "gps"
+            context.user_data["waiting_edit_value"] = True
+            location_button = KeyboardButton("📍 ارسال موقعیت", request_location=True)
+            keyboard = ReplyKeyboardMarkup([[location_button]], one_time_keyboard=True, resize_keyboard=True)
+            await update.message.reply_text("📍 موقعیت جدید:", reply_markup=keyboard)
+            return
+
+    # هندل کردن مقدار ویرایش
+    if context.user_data.get("waiting_edit_value"):
+        my_id = update.effective_user.id
+        field = context.user_data.get("edit_field")
+        context.user_data["waiting_edit_value"] = False
+        context.user_data["waiting_edit"] = False
+        if field == "شهر":
+            await update_user(my_id, {"city": text})
+        elif field == "علایق":
+            await update_user(my_id, {"interests": text})
+        elif field == "اسم":
+            await update_user(my_id, {"display_name": text})
+        elif field == "جنسیت":
+            g = text.replace("👦 ", "").replace("👧 ", "")
+            await update_user(my_id, {"gender": g})
+        elif field == "سن":
+            if text.isdigit() and int(text) >= 18:
+                await update_user(my_id, {"age": int(text)})
+            else:
+                await update.message.reply_text("❌ سن باید حداقل ۱۸ باشه!", reply_markup=main_menu())
+                return
+        await update.message.reply_text("✅ پروفایل به‌روز شد!", reply_markup=main_menu())
         return
 
     if "جستجو" in text and "پیشرفته" not in text:
