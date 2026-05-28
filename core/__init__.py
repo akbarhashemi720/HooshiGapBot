@@ -7,13 +7,21 @@ from core.users import (
     create_user,
     update_user,
     update_username,
+    update_last_seen,
+    get_online_status_text,
     ban_user,
     unban_user,
     is_banned,
     get_all_users,
     get_recent_users,
     get_user_stats,
-    get_user_link
+    get_users_by_province,
+    get_users_by_age,
+    get_new_users,
+    get_popular_users,
+    get_users_without_chat,
+    get_user_link,
+    db_get
 )
 
 from core.coins import (
@@ -76,7 +84,9 @@ from core.matching import (
     get_recommendations,
     save_skip,
     save_match_history,
-    update_behavioral_profile
+    update_behavioral_profile,
+    get_skipped_ids,
+    get_liked_ids
 )
 
 from core.location import (
@@ -92,8 +102,12 @@ from core.location import (
 __all__ = [
     # users
     "get_user", "user_exists", "create_user", "update_user",
-    "update_username", "ban_user", "unban_user", "is_banned",
-    "get_all_users", "get_recent_users", "get_user_stats", "get_user_link",
+    "update_username", "update_last_seen", "get_online_status_text",
+    "ban_user", "unban_user", "is_banned",
+    "get_all_users", "get_recent_users", "get_user_stats",
+    "get_users_by_province", "get_users_by_age",
+    "get_new_users", "get_popular_users", "get_users_without_chat",
+    "get_user_link", "db_get",
     # coins
     "get_coins", "add_coins", "deduct_coin", "has_enough_coins",
     "is_vip", "set_vip", "referral_reward",
@@ -114,6 +128,7 @@ __all__ = [
     "calculate_compatibility", "get_quality_label", "infer_personality",
     "get_smart_matches", "get_best_match", "get_recommendations",
     "save_skip", "save_match_history", "update_behavioral_profile",
+    "get_skipped_ids", "get_liked_ids",
     # location
     "distance_km", "encode_location", "decode_location",
     "get_nearby_geohashes", "get_distance_bucket",
