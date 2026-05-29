@@ -69,11 +69,11 @@ BRAND_FOOTER = "⚡️ powered by HooshiGap AI"
 
 def main_menu():
     keyboard = [
-        ["🔍 جستجو", "🔎 جستجوی پیشرفته"],
-        ["🎲 اتصال تصادفی", "👤 پروفایل من"],
-        ["💰 کیف پول", "🎁 دعوت دوستان"],
-        ["📍 افراد نزدیک", "💬 چت‌های اخیر"],
-        ["🎤 ویس پروفایل"]
+        ["🤝 به یه ناشناس وصلم کن!"],
+        ["🔍 جستجو کاربران", "📍 افراد نزدیک"],
+        ["🧭 راهنما", "👤 پروفایل", "💰 سکه"],
+        ["🔗 معرفی به دوستان (سکه رایگان)"],
+        ["🎭 لینک ناشناس من"]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -93,32 +93,36 @@ def format_profile_card(user, extra="", show_link=True):
     username_line = f"👤 @{username}\n" if username else ""
     online_status = get_online_status_text(user)
     like_count = user.get("like_count", 0)
-    text = (
-        f"{vip_badge}{voice_badge}\n"
-        f"{BRAND_SEPARATOR}\n"
-        f"{name_line}"
-        f"{username_line}"
-        f"{gender_emoji} جنسیت: {user.get('gender', '-')}\n"
-        f"🎂 سن: {user.get('age', '-')}\n"
-        f"🏙 شهر: {user.get('city', '-')}\n"
-        f"📡 وضعیت: {online_status}\n"
-        f"❤️ لایک: {like_count}\n"
-        f"{BRAND_SEPARATOR}"
-    )
+    lines = []
+    if vip_badge:
+        lines.append(vip_badge)
+    if voice_badge:
+        lines.append(voice_badge)
+    if display_name:
+        lines.append(f"✨  {display_name}")
+    if username_line:
+        lines.append(username_line.strip())
+    lines.append("")
+    lines.append(f"{gender_emoji}  جنسیت:  {user.get('gender', '-')}")
+    lines.append(f"🎂  سن:  {user.get('age', '-')}")
+    lines.append(f"🏙  شهر:  {user.get('city', '-')}")
+    lines.append("")
+    lines.append(f"📡  {online_status}")
+    lines.append(f"❤️  لایک:  {like_count}")
     if show_link and user_link:
-        text += f"\n🔗 {user_link}"
+        lines.append(f"🔗  {user_link}")
     if extra:
-        text += f"\n{extra}"
-    return text
+        lines.append(extra)
+    return "\n".join(lines)
 
-def user_action_keyboard(user_id, like_count=0):
+def user_action_keyboard(user_id, like_count=0, is_blocked=False):
+    block_btn = InlineKeyboardButton("✅ آنبلاک کاربر", callback_data=f"unblock_{user_id}") if is_blocked else InlineKeyboardButton("🚫 بلاک کاربر", callback_data=f"block_{user_id}")
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(f"💜 {like_count} لایک", callback_data=f"like_{user_id}")],
         [InlineKeyboardButton("🎁 خرید سکه برای کاربر", callback_data=f"gift_coins_{user_id}")],
         [InlineKeyboardButton("💬 درخواست چت", callback_data=f"chatreq_{user_id}"),
          InlineKeyboardButton("📨 پیام دایرکت", callback_data=f"dm_{user_id}")],
-        [InlineKeyboardButton("🚫 بلاک کاربر", callback_data=f"block_{user_id}"),
-         InlineKeyboardButton("🚨 گزارش کاربر", callback_data=f"report_{user_id}")],
+        [block_btn, InlineKeyboardButton("🚨 گزارش کاربر", callback_data=f"report_{user_id}")],
         [InlineKeyboardButton("➕ افزودن به مخاطبین", callback_data=f"add_contact_{user_id}")],
         [InlineKeyboardButton("🔔 اطلاع از آنلاین شدن", callback_data=f"notify_online_{user_id}")]
     ])
@@ -599,20 +603,31 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("✅ پروفایل به‌روز شد!", reply_markup=main_menu())
         return
 
-    if "جستجو" in text and "پیشرفته" not in text:
-        return await new_search(update, context)
-    elif "اتصال تصادفی" in text:
+    if "ناشناس وصلم کن" in text:
         await random_user(update, context)
-    elif "پروفایل من" in text:
+    elif "جستجو کاربران" in text:
+        return await new_search(update, context)
+    elif "افراد نزدیک" in text:
+        return await nearby_start(update, context)
+    elif "پروفایل" in text and "ویرایش" not in text:
         await profile(update, context)
-    elif "کیف پول" in text:
+    elif "سکه" in text:
         await coins_cmd(update, context)
-    elif "دعوت" in text:
+    elif "معرفی به دوستان" in text:
         await invite(update, context)
-    elif "هم‌سن" in text:
-        await same_age(update, context)
-    elif "ویس پروفایل" in text:
-        await voice_profile_menu(update, context)
+    elif "لینک ناشناس" in text:
+        await invite(update, context)
+    elif "راهنما" in text:
+        await update.message.reply_text(
+            f"💜 راهنمای هوشی‌گپ\n{BRAND_SEPARATOR}\n"
+            f"🤝 وصلم کن — اتصال تصادفی به یه ناشناس\n"
+            f"🔍 جستجو — پیدا کردن کاربران\n"
+            f"📍 افراد نزدیک — کاربران اطراف شما\n"
+            f"👤 پروفایل — مشاهده و ویرایش پروفایل\n"
+            f"💰 سکه — کیف پول و VIP\n"
+            f"🔗 معرفی — دعوت دوستان و گرفتن سکه رایگان",
+            reply_markup=main_menu()
+        )
 
 async def new_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """منوی جستجوی جدید"""
@@ -1159,10 +1174,7 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.answer("❌ سکه کافی ندارید!", show_alert=True)
                 return
             await deduct_coin(to_id)
-        try:
-            await query.edit_message_reply_markup(reply_markup=None)
-        except:
-            pass
+
         dm_text = msg.get("message", "")
         kb = InlineKeyboardMarkup([[
             InlineKeyboardButton("💬 پاسخ", callback_data=f"chatreq_{from_id}"),
@@ -1178,26 +1190,17 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data.startswith("search_next_"):
         page = int(query.data.split("_")[2])
         context.user_data["search_page"] = page
-        try:
-            await query.edit_message_reply_markup(reply_markup=None)
-        except:
-            pass
+
         await show_search_page(update, context)
         return
 
     if query.data == "skip":
-        try:
-            await query.edit_message_reply_markup(reply_markup=None)
-        except:
-            pass
+
         await save_skip(update.effective_user.id, 0)
         return
 
     if query.data == "random_next":
-        try:
-            await query.edit_message_reply_markup(reply_markup=None)
-        except:
-            pass
+
         return
 
     if query.data.startswith("gift_coins_"):
@@ -1235,10 +1238,7 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if query.data == "cancel_gift":
-        try:
-            await query.edit_message_reply_markup(reply_markup=None)
-        except:
-            pass
+
         return
 
     if query.data.startswith("add_contact_"):
@@ -1266,16 +1266,34 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("🔔 وقتی آنلاین شد بهت خبر می‌دیم!", show_alert=True)
         return
 
+    if query.data.startswith("unblock_"):
+        to_id = int(query.data.split("_")[1])
+        from_id = update.effective_user.id
+        import httpx
+        headers = {"apikey": "sb_publishable_DBlfUH3YcVEsCJ2m-3tOWg_nJNMBh5R", "Authorization": f"Bearer sb_publishable_DBlfUH3YcVEsCJ2m-3tOWg_nJNMBh5R"}
+        async with httpx.AsyncClient() as client:
+            await client.delete(f"https://ahjdziimhlpynvvwhgiz.supabase.co/rest/v1/blocks?blocker=eq.{from_id}&blocked=eq.{to_id}", headers=headers)
+        to_user = await get_user(to_id)
+        like_count = to_user.get("like_count", 0) if to_user else 0
+        try:
+            await query.edit_message_reply_markup(reply_markup=user_action_keyboard(to_id, like_count, False))
+        except:
+            pass
+        await query.answer("✅ آنبلاک شد!", show_alert=False)
+        return
+
     if query.data.startswith("block_"):
         to_id = int(query.data.split("_")[1])
         from_id = update.effective_user.id
         await block_user(from_id, to_id)
         await block_penalty(to_id)
+        to_user = await get_user(to_id)
+        like_count = to_user.get("like_count", 0) if to_user else 0
         try:
-            await query.edit_message_reply_markup(reply_markup=None)
+            await query.edit_message_reply_markup(reply_markup=user_action_keyboard(to_id, like_count, True))
         except:
             pass
-        await context.bot.send_message(chat_id=from_id, text="🚫 کاربر بلاک شد.")
+        await query.answer("🚫 کاربر بلاک شد.", show_alert=False)
         return
 
     if query.data.startswith("report_"):
@@ -1283,11 +1301,7 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from_id = update.effective_user.id
         await report_user(from_id, to_id)
         await report_penalty(to_id)
-        try:
-            await query.edit_message_reply_markup(reply_markup=None)
-        except:
-            pass
-        await context.bot.send_message(chat_id=from_id, text="✅ گزارش ثبت شد!")
+        await query.answer("✅ گزارش ثبت شد!", show_alert=True)
         return
 
     if query.data.startswith("chatreq_"):
@@ -1338,10 +1352,7 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from_id = int(query.data.split("_")[1])
         to_id = update.effective_user.id
         start_chat(from_id, to_id)
-        try:
-            await query.edit_message_reply_markup(reply_markup=None)
-        except:
-            pass
+
         await context.bot.send_message(
             chat_id=to_id,
             text=f"💜 چت شروع شد!\n{BRAND_SEPARATOR}\n🔴 برای پایان دادن دکمه زیر رو بزن",
@@ -1362,11 +1373,12 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data.startswith("reject_"):
         from_id = int(query.data.split("_")[1])
-        try:
-            await query.edit_message_reply_markup(reply_markup=None)
-        except:
-            pass
+
         await context.bot.send_message(chat_id=from_id, text="❌ درخواست چت شما رد شد.")
+        return
+
+    # فقط like_ رو هندل کن
+    if not query.data.startswith("like_"):
         return
 
     to_id = int(query.data.split("_")[1])
