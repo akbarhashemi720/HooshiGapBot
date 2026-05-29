@@ -629,12 +629,17 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def new_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """منوی جستجوی جدید"""
     keyboard = [
-        ["🏘 هم استانی‌ها", "🎂 هم سن‌ها"],
-        ["🆕 کاربران جدید", "💬 بدون چت‌ها"],
-        ["❤️ کاربران محبوب", "🔙 بازگشت"]
+        ["💌 به مخاطب خاصم وصلم کن"],
+        ["👫 هم سن‌ها", "🎯 هم استانی‌ها"],
+        ["💬 جستجوی پیشرفته"],
+        ["🚶 بدون چت‌ها", "👰 کاربران جدید"],
+        ["👀 چت‌های اخیر من"],
+        ["📍 جستجو با GPS فعلی من"],
+        ["❤️ کاربران محبوب بر اساس لایک"],
+        ["🔙 بازگشت"]
     ]
     await update.message.reply_text(
-        f"🔍 جستجو\n{BRAND_SEPARATOR}\nچه کسایی رو نشونت بدم؟",
+        "🔍 جستجو کاربران\nچه کسایی رو نشونت بدم؟ انتخاب کن",
         reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     )
     return SEARCH_TYPE
