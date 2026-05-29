@@ -1224,6 +1224,10 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    if query.data == "done":
+        await query.answer()
+        return
+
     if query.data.startswith("search_next_"):
         page = int(query.data.split("_")[2])
         context.user_data["search_page"] = page
@@ -1371,7 +1375,10 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await send_voice_profile(context.bot, to_id, my_profile, is_matched=False)
             except:
                 pass
-        await context.bot.send_message(chat_id=from_id, text="✅ درخواست چت فرستاده شد!")
+        await context.bot.send_message(
+            chat_id=from_id,
+            text=f"✅ درخواست چت ارسال شد!\n⏳ منتظر تایید یا رد کاربر باشید."
+        )
         return
 
     if query.data.startswith("dm_"):
@@ -1389,6 +1396,12 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from_id = int(query.data.split("_")[1])
         to_id = update.effective_user.id
         start_chat(from_id, to_id)
+        try:
+            await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("✅ قبول شد", callback_data="done")]
+            ]))
+        except:
+            pass
 
         await context.bot.send_message(
             chat_id=to_id,
@@ -1410,8 +1423,16 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data.startswith("reject_"):
         from_id = int(query.data.split("_")[1])
-
-        await context.bot.send_message(chat_id=from_id, text="❌ درخواست چت شما رد شد.")
+        try:
+            await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("❌ رد شد", callback_data="done")]
+            ]))
+        except:
+            pass
+        try:
+            await context.bot.send_message(chat_id=from_id, text="❌ درخواست چت شما رد شد.")
+        except:
+            pass
         return
 
     # فقط like_ رو هندل کن
