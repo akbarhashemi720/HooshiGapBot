@@ -96,21 +96,18 @@ def format_profile_card(user, extra="", show_link=True):
     lines = []
     if vip_badge:
         lines.append(vip_badge)
-    if voice_badge:
-        lines.append(voice_badge)
     if display_name:
-        lines.append(f"✨  {display_name}")
-    if username_line:
-        lines.append(username_line.strip())
+        lines.append(f"✨ {display_name}")
+    if username:
+        lines.append(f"👤 @{username}")
     lines.append("")
-    lines.append(f"{gender_emoji}  جنسیت:  {user.get('gender', '-')}")
-    lines.append(f"🎂  سن:  {user.get('age', '-')}")
-    lines.append(f"🏙  شهر:  {user.get('city', '-')}")
-    lines.append("")
-    lines.append(f"📡  {online_status}")
-    lines.append(f"❤️  لایک:  {like_count}")
+    lines.append(f"{gender_emoji} جنسیت: {user.get('gender', '-')}")
+    lines.append(f"🎂 سن: {user.get('age', '-')}")
+    lines.append(f"🏙 شهر: {user.get('city', '-')}")
+    lines.append(f"📡 {online_status}")
+    lines.append(f"❤️ لایک: {like_count}")
     if show_link and user_link:
-        lines.append(f"🔗  {user_link}")
+        lines.append(f"🔗 {user_link}")
     if extra:
         lines.append(extra)
     return "\n".join(lines)
