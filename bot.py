@@ -704,6 +704,13 @@ async def search_gender_new_handler(update: Update, context: ContextTypes.DEFAUL
         users = await get_users_without_chat(my_id, gender, limit=50)
     elif "محبوب" in search_type:
         users = await get_popular_users(gender, limit=50)
+    elif "direct" in search_type:
+        # جستجو مستقیم با متن
+        search_text = update.message.text.strip().replace("@", "")
+        users = await db_get("users", f"username=eq.{search_text}&limit=5")
+        if not users:
+            await update.message.reply_text("😔 کاربر پیدا نشد!", reply_markup=main_menu())
+            return ConversationHandler.END
     elif "مخاطب خاص" in search_type:
         # جستجو بر اساس نام یا آیدی
         search_query = gender_text  # اینجا text همون ورودی کاربره
