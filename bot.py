@@ -1799,7 +1799,7 @@ def main():
     app.add_handler(CommandHandler("endchat", end_chat_cmd))
     new_search_conv = ConversationHandler(
         entry_points=[
-            MessageHandler(filters.Regex("^🔍 جستجو$"), new_search)
+            MessageHandler(filters.Regex("جستجو کاربران"), new_search)
         ],
         states={
             SEARCH_TYPE: [MessageHandler(filters.TEXT & ~filters.COMMAND, search_type_handler)],
