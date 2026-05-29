@@ -1820,7 +1820,10 @@ def main():
     app.add_handler(MessageHandler(filters.ANIMATION, forward_media))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_handler))
     print("💜 هوشی‌گپ شروع به کار کرد...")
-    app.run_polling()
+    app.run_polling(
+        drop_pending_updates=True,
+        allowed_updates=Update.ALL_TYPES
+    )
 
 if __name__ == "__main__":
     main()
