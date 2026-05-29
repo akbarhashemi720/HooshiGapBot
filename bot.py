@@ -648,6 +648,26 @@ async def search_type_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("↩️ لغو شد.", reply_markup=main_menu())
         return ConversationHandler.END
 
+    if "جستجوی پیشرفته" in search_type:
+        await update.message.reply_text("لغو شد.", reply_markup=main_menu())
+        return await search_start(update, context)
+
+    if "چت‌های اخیر" in search_type:
+        await update.message.reply_text("لغو شد.", reply_markup=main_menu())
+        return await recent_start(update, context)
+
+    if "GPS" in search_type:
+        await update.message.reply_text("لغو شد.", reply_markup=main_menu())
+        return await nearby_start(update, context)
+
+    if "مخاطب خاصم" in search_type:
+        await update.message.reply_text(
+            "❤️ به مخاطب خاصم وصلم کن\nاسم یا آیدی مخاطب رو بنویس:",
+            reply_markup=ReplyKeyboardRemove()
+        )
+        context.user_data["search_type"] = "مخاطب خاص"
+        return SEARCH_GENDER_NEW
+
     keyboard = [["👦 پسر", "👧 دختر", "👥 همه"]]
     await update.message.reply_text(
         "جنسیت مورد نظر؟",
@@ -684,6 +704,14 @@ async def search_gender_new_handler(update: Update, context: ContextTypes.DEFAUL
         users = await get_users_without_chat(my_id, gender, limit=50)
     elif "محبوب" in search_type:
         users = await get_popular_users(gender, limit=50)
+    elif "مخاطب خاص" in search_type:
+        # جستجو بر اساس نام یا آیدی
+        search_query = gender_text  # اینجا text همون ورودی کاربره
+        all_users = await db_get("users", f"telegram_id=neq.{my_id}&is_banned=eq.false&limit=50")
+        users = [u for u in all_users if 
+                search_query.lower() in str(u.get("display_name", "")).lower() or
+                search_query.lower() in str(u.get("username", "")).lower() or
+                search_query == str(u.get("telegram_id", ""))]
 
     # فیلتر کاربر خودش
     users = [u for u in users if u.get("telegram_id") != my_id]
