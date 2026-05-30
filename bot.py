@@ -692,6 +692,11 @@ async def search_type_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def search_gender_new_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """هندل کردن جنسیت در جستجوی جدید"""
     gender_text = update.message.text
+
+    if "بازگشت" in gender_text:
+        await update.message.reply_text("↩️ لغو شد.", reply_markup=main_menu())
+        return ConversationHandler.END
+
     gender = None
     if "پسر" in gender_text:
         gender = "پسر"
@@ -719,14 +724,10 @@ async def search_gender_new_handler(update: Update, context: ContextTypes.DEFAUL
     elif "محبوب" in search_type:
         users = await get_popular_users(gender, limit=50)
     elif "recent" in search_type:
-        gender = None
-        if "پسر" in update.message.text:
-            gender = "پسر"
-        elif "دختر" in update.message.text:
-            gender = "دختر"
-        found = await get_chat_history(my_id, gender if gender else "همه")
+        gender_filter = gender if gender else "همه"
+        found = await get_chat_history(my_id, gender_filter)
         if not found:
-            await update.message.reply_text("❌ کسی پیدا نشد!", reply_markup=main_menu())
+            await update.message.reply_text("❌ هنوز چتی نداشتی!", reply_markup=main_menu())
             return ConversationHandler.END
         context.user_data["search_results"] = found
         context.user_data["search_page"] = 0
@@ -1778,7 +1779,7 @@ def main():
     search_conv = ConversationHandler(
         entry_points=[
             CommandHandler("search", search_start),
-            MessageHandler(filters.Regex("جستجو"), search_start)
+            MessageHandler(filters.Regex("جستجوی پیشرفته"), search_start)
         ],
         states={
             SEARCH_GENDER: [MessageHandler(filters.TEXT & ~filters.COMMAND, search_gender)],
