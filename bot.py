@@ -1534,6 +1534,7 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if query.data.startswith("adv_seen_"):
+        from core.users import db_get as _db_get
         seen_val = query.data.replace("adv_seen_", "")
         from_id = update.effective_user.id
         my_id = from_id
@@ -1568,7 +1569,7 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
             params += f"&last_seen=gte.{cutoff.isoformat()}"
 
         params += "&limit=50"
-        users = await db_get("users", params)
+        users = await _db_get("users", params)
 
         if not users:
             await query.edit_message_text("😔 کسی پیدا نشد! فیلترها رو تغییر بده.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 جستجوی جدید", callback_data="new_adv_search")]]))
