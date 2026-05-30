@@ -622,6 +622,17 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=main_menu()
         )
 
+async def search_type_handler_advanced(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """شروع جستجوی پیشرفته مستقیم"""
+    context.user_data["search_type"] = "جستجوی پیشرفته"
+    context.user_data["in_advanced_search"] = True
+    keyboard = [["پسر", "دختر", "هر دو"], ["🔙 بازگشت"]]
+    await update.message.reply_text(
+        f"🔍 جستجوی پیشرفته\n{BRAND_SEPARATOR}\nجنسیت مورد نظرت؟",
+        reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+    )
+    return SEARCH_GENDER_NEW
+
 async def new_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """منوی جستجوی جدید"""
     keyboard = [
@@ -1828,7 +1839,6 @@ def main():
     search_conv = ConversationHandler(
         entry_points=[
             CommandHandler("search", search_start),
-            MessageHandler(filters.Regex("جستجوی پیشرفته"), search_start)
         ],
         states={
             SEARCH_GENDER: [MessageHandler(filters.TEXT & ~filters.COMMAND, search_gender)],
@@ -1896,7 +1906,8 @@ def main():
     app.add_handler(CommandHandler("endchat", end_chat_cmd))
     new_search_conv = ConversationHandler(
         entry_points=[
-            MessageHandler(filters.Regex("جستجو کاربران"), new_search)
+            MessageHandler(filters.Regex("جستجو کاربران"), new_search),
+            MessageHandler(filters.Regex("جستجوی پیشرفته"), search_type_handler_advanced)
         ],
         states={
             SEARCH_TYPE: [MessageHandler(filters.TEXT & ~filters.COMMAND, search_type_handler)],
