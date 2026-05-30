@@ -661,12 +661,12 @@ async def search_type_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         return ConversationHandler.END
 
     if "جستجوی پیشرفته" in search_type:
-        context.user_data["in_advanced_search"] = True
-        keyboard = [["پسر", "دختر", "هر دو"], ["🔙 بازگشت"]]
+        keyboard = [["👦 پسر", "👧 دختر", "👥 همه"], ["🔙 بازگشت"]]
         await update.message.reply_text(
-            f"🔍 جستجوی پیشرفته\nجنسیت مورد نظرت؟",
+            "🔍 جستجوی پیشرفته\nجنسیت مورد نظرت؟",
             reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
         )
+        context.user_data["in_advanced_search"] = True
         return SEARCH_GENDER_NEW
 
     if "چت‌های اخیر" in search_type:
@@ -832,6 +832,56 @@ async def search_gender_new_handler(update: Update, context: ContextTypes.DEFAUL
 
     await show_search_page(update, context)
     return ConversationHandler.END
+
+async def show_search_page_inline(update, context, chat_id):
+    """نمایش صفحه نتایج جستجو"""
+    users = context.user_data.get("search_results", [])
+    page = context.user_data.get("search_page", 0)
+    per_page = 10
+    start = page * per_page
+    end = start + per_page
+    page_users = users[start:end]
+
+    if not page_users:
+        await context.bot.send_message(chat_id=chat_id, text="📄 صفحه دیگه‌ای نیست!", reply_markup=main_menu())
+        return
+
+    total_pages = (len(users) + per_page - 1) // per_page
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=f"📄 صفحه {page+1} از {total_pages} — {len(users)} نفر پیدا شد",
+        reply_markup=main_menu()
+    )
+
+    for user in page_users:
+        like_count = user.get("like_count", 0)
+        online_status = get_online_status_text(user)
+        display_name = user.get("display_name", "")
+        username = user.get("username", "")
+        user_link = get_user_link(user)
+        gender_emoji = "👦" if user.get("gender") == "پسر" else "👧"
+
+        text = ""
+        if display_name:
+            text += f"✨ {display_name}\n"
+        if username:
+            text += f"👤 @{username}\n"
+        text += f"\n{gender_emoji} {user.get('gender')} | 🎂 {user.get('age')} | 🏙 {user.get('city')}\n"
+        text += f"📡 {online_status}\n"
+        text += f"❤️ {like_count}\n"
+        text += f"🔗 {user_link}"
+
+        keyboard = user_action_keyboard(user["telegram_id"], like_count)
+        if user.get("photo_id"):
+            await context.bot.send_photo(chat_id=chat_id, photo=user["photo_id"], caption=text, reply_markup=keyboard, parse_mode="HTML")
+        else:
+            await context.bot.send_message(chat_id=chat_id, text=text, reply_markup=keyboard, parse_mode="HTML")
+
+    if end < len(users):
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton("⏭ صفحه بعد", callback_data=f"search_next_{page+1}")
+        ]])
+        await context.bot.send_message(chat_id=chat_id, text="برای دیدن بیشتر:", reply_markup=keyboard)
 
 async def show_search_page(update, context):
     """نمایش صفحه‌بندی نتایج جستجو"""
@@ -1074,6 +1124,89 @@ async def recent_gender(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for user in found[:10]:
         await send_user_card(update, user)
     return ConversationHandler.END
+
+
+# ==================== جستجوی پیشرفته Inline ====================
+
+PROVINCES = [
+    "اصفهان", "اردبیل", "آذربایجان غربی", "البرز", "ایلام",
+    "بوشهر", "تهران", "چهارمحال و بختیاری", "خراسان جنوبی",
+    "خراسان رضوی", "خراسان شمالی", "خوزستان", "زنجان", "سمنان",
+    "سیستان و بلوچستان", "فارس", "قزوین", "قم", "کردستان",
+    "کرمان", "کرمانشاه", "کهگیلویه وبویراحمد", "گلستان", "گیلان",
+    "لرستان", "مازندران", "مرکزی", "هرمزگان", "همدان", "یزد",
+    "آذربایجان شرقی"
+]
+
+def get_province_keyboard(selected=None):
+    """Inline keyboard برای انتخاب استان"""
+    buttons = []
+    row = []
+    for i, p in enumerate(PROVINCES):
+        label = f"✅ {p}" if selected == p else p
+        row.append(InlineKeyboardButton(label, callback_data=f"adv_prov_{p}"))
+        if len(row) == 3:
+            buttons.append(row)
+            row = []
+    if row:
+        buttons.append(row)
+    buttons.append([
+        InlineKeyboardButton("✅ انتخاب همه", callback_data="adv_prov_all"),
+        InlineKeyboardButton("➡️ مرحله بعدی", callback_data="adv_next_age")
+    ])
+    return InlineKeyboardMarkup(buttons)
+
+def get_age_keyboard(min_age=None, max_age=None):
+    """Inline keyboard برای انتخاب سن"""
+    buttons = []
+    row = []
+    for age in range(9, 100):
+        if min_age and age == min_age:
+            label = f"✅{age}"
+        elif max_age and age == max_age:
+            label = f"✅{age}"
+        else:
+            label = str(age)
+        row.append(InlineKeyboardButton(label, callback_data=f"adv_age_{age}"))
+        if len(row) == 7:
+            buttons.append(row)
+            row = []
+    if row:
+        buttons.append(row)
+    buttons.append([InlineKeyboardButton("👥 همه سنی‌ها", callback_data="adv_age_all")])
+    return InlineKeyboardMarkup(buttons)
+
+def get_last_seen_keyboard():
+    """Inline keyboard برای آخرین حضور"""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("تا یک ساعت قبل", callback_data="adv_seen_1h"),
+         InlineKeyboardButton("تا 6 ساعت قبل", callback_data="adv_seen_6h")],
+        [InlineKeyboardButton("تا یک روز قبل", callback_data="adv_seen_1d"),
+         InlineKeyboardButton("تا دو روز قبل", callback_data="adv_seen_2d")],
+        [InlineKeyboardButton("تا سه روز قبل", callback_data="adv_seen_3d"),
+         InlineKeyboardButton("همه", callback_data="adv_seen_all")]
+    ])
+
+async def start_advanced_search(update, context, gender):
+    """شروع جستجوی پیشرفته inline"""
+    context.user_data["adv_gender"] = gender
+    context.user_data["adv_province"] = None
+    context.user_data["adv_min_age"] = None
+    context.user_data["adv_max_age"] = None
+
+    text = (
+        f"🔍 جستجوی پیشرفته\n"
+        f"━━━━━━━━━━━━\n"
+        f"👫 جنسیت: [{gender}]\n"
+        f"🎯 استان های انتخاب شده: []\n\n"
+        f"استان های مورد نظرتو انتخاب کن و در آخر گزینه ➡️ مرحله بعدی رو بزن 👇"
+    )
+
+    if hasattr(update, 'callback_query') and update.callback_query:
+        await update.callback_query.message.reply_text(text, reply_markup=get_province_keyboard())
+    else:
+        await update.message.reply_text(text, reply_markup=get_province_keyboard())
+
 
 async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -1323,6 +1456,135 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "done":
         await query.answer()
+        return
+
+    # جستجوی پیشرفته inline
+    if query.data.startswith("adv_prov_"):
+        prov = query.data.replace("adv_prov_", "")
+        from_id = update.effective_user.id
+        if prov == "all":
+            context.user_data["adv_province"] = "all"
+        else:
+            context.user_data["adv_province"] = prov
+        gender = context.user_data.get("adv_gender", "همه")
+        text = (
+            f"🔍 جستجوی پیشرفته\n━━━━━━━━━━━━\n"
+            f"👫 جنسیت: [{gender}]\n"
+            f"🎯 استان های انتخاب شده: [{prov if prov != 'all' else 'همه'}]\n"
+            f"👥 بازه سنی: [? - ?]\n\n"
+            f"حداقل سن بازه رو انتخاب کن 👇"
+        )
+        try:
+            await query.edit_message_text(text, reply_markup=get_age_keyboard())
+        except:
+            await context.bot.send_message(chat_id=from_id, text=text, reply_markup=get_age_keyboard())
+        return
+
+    if query.data.startswith("adv_age_"):
+        age_val = query.data.replace("adv_age_", "")
+        from_id = update.effective_user.id
+        gender = context.user_data.get("adv_gender", "همه")
+        prov = context.user_data.get("adv_province", "همه")
+
+        if age_val == "all":
+            context.user_data["adv_min_age"] = None
+            context.user_data["adv_max_age"] = None
+            text = (
+                f"🔍 جستجوی پیشرفته\n━━━━━━━━━━━━\n"
+                f"👫 جنسیت: [{gender}]\n"
+                f"🎯 استان: [{prov if prov != 'all' else 'همه'}]\n"
+                f"👥 بازه سنی: [همه]\n"
+                f"👁 آخرین حضور: []\n\n"
+                f"آخرین زمان حضور کاربر رو انتخاب کن 👇"
+            )
+            try:
+                await query.edit_message_text(text, reply_markup=get_last_seen_keyboard())
+            except:
+                await context.bot.send_message(chat_id=from_id, text=text, reply_markup=get_last_seen_keyboard())
+            return
+
+        if not context.user_data.get("adv_min_age"):
+            context.user_data["adv_min_age"] = int(age_val)
+            text = (
+                f"🔍 جستجوی پیشرفته\n━━━━━━━━━━━━\n"
+                f"👫 جنسیت: [{gender}]\n"
+                f"🎯 استان: [{prov if prov != 'all' else 'همه'}]\n"
+                f"👥 بازه سنی: [{age_val} - ?]\n\n"
+                f"حالا حداکثر سن رو انتخاب کن 👇"
+            )
+            try:
+                await query.edit_message_text(text, reply_markup=get_age_keyboard(min_age=int(age_val)))
+            except:
+                await context.bot.send_message(chat_id=from_id, text=text, reply_markup=get_age_keyboard(min_age=int(age_val)))
+        else:
+            context.user_data["adv_max_age"] = int(age_val)
+            min_age = context.user_data["adv_min_age"]
+            text = (
+                f"🔍 جستجوی پیشرفته\n━━━━━━━━━━━━\n"
+                f"👫 جنسیت: [{gender}]\n"
+                f"🎯 استان: [{prov if prov != 'all' else 'همه'}]\n"
+                f"👥 بازه سنی: [{min_age} - {age_val}]\n"
+                f"👁 آخرین حضور: []\n\n"
+                f"آخرین زمان حضور کاربر رو انتخاب کن 👇"
+            )
+            try:
+                await query.edit_message_text(text, reply_markup=get_last_seen_keyboard())
+            except:
+                await context.bot.send_message(chat_id=from_id, text=text, reply_markup=get_last_seen_keyboard())
+        return
+
+    if query.data.startswith("adv_seen_"):
+        seen_val = query.data.replace("adv_seen_", "")
+        from_id = update.effective_user.id
+        my_id = from_id
+        gender = context.user_data.get("adv_gender", "همه")
+        prov = context.user_data.get("adv_province")
+        min_age = context.user_data.get("adv_min_age")
+        max_age = context.user_data.get("adv_max_age")
+
+        # ساخت query
+        params = f"telegram_id=neq.{my_id}"
+        if gender and gender not in ["همه", "هر دو"]:
+            params += f"&gender=eq.{gender}"
+        if prov and prov != "all":
+            params += f"&province=eq.{prov}"
+        if min_age:
+            params += f"&age=gte.{min_age}"
+        if max_age:
+            params += f"&age=lte.{max_age}"
+        if seen_val != "all":
+            from datetime import datetime, timedelta, timezone
+            now = datetime.now(timezone.utc)
+            if seen_val == "1h":
+                cutoff = now - timedelta(hours=1)
+            elif seen_val == "6h":
+                cutoff = now - timedelta(hours=6)
+            elif seen_val == "1d":
+                cutoff = now - timedelta(days=1)
+            elif seen_val == "2d":
+                cutoff = now - timedelta(days=2)
+            elif seen_val == "3d":
+                cutoff = now - timedelta(days=3)
+            params += f"&last_seen=gte.{cutoff.isoformat()}"
+
+        params += "&limit=50"
+        users = await db_get("users", params)
+
+        if not users:
+            await query.edit_message_text("😔 کسی پیدا نشد! فیلترها رو تغییر بده.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 جستجوی جدید", callback_data="new_adv_search")]]))
+            return
+
+        context.user_data["search_results"] = users
+        context.user_data["search_page"] = 0
+
+        await query.edit_message_text(f"✅ {len(users)} نفر پیدا شد!")
+        await show_search_page_inline(update, context, from_id)
+        return
+
+    if query.data == "new_adv_search":
+        from_id = update.effective_user.id
+        gender = context.user_data.get("adv_gender", "همه")
+        await start_advanced_search(update, context, gender)
         return
 
     if query.data.startswith("search_next_"):
