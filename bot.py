@@ -1933,14 +1933,39 @@ def main():
     app.add_handler(MessageHandler(filters.ANIMATION, forward_media))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_handler))
     print("💜 هوشی‌گپ شروع به کار کرد...")
+    import asyncio
+    import httpx
+
+    # اول webhook رو پاک کن
+    async def delete_webhook():
+        try:
+            async with httpx.AsyncClient() as client:
+                await client.get(f"https://api.telegram.org/bot{TOKEN}/deleteWebhook?drop_pending_updates=true")
+                print("✅ Webhook deleted")
+        except:
+            pass
+
+    asyncio.get_event_loop().run_until_complete(delete_webhook())
+
+    # بعد HTTP server رو شروع کن
+    import threading
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"OK")
+        def log_message(self, *args):
+            pass
+
     PORT = int(os.environ.get("PORT", 10000))
-    WEBHOOK_URL = "https://hooshigapbot.onrender.com"
-    app.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        url_path=TOKEN,
-        webhook_url=f"{WEBHOOK_URL}/{TOKEN}",
-        drop_pending_updates=True
+    server = HTTPServer(("0.0.0.0", PORT), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+
+    app.run_polling(
+        drop_pending_updates=True,
+        allowed_updates=Update.ALL_TYPES
     )
 
 if __name__ == "__main__":
