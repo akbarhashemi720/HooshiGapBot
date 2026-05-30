@@ -2012,17 +2012,24 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["display_name"] = update.message.text
-    keyboard = [["👦 پسر", "👧 دختر"]]
-    await update.message.reply_text(
-        f"جنسیت شما؟",
-        reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
-    )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("👦 پسر", callback_data="reg_gender_پسر"),
+         InlineKeyboardButton("👧 دختر", callback_data="reg_gender_دختر")]
+    ])
+    await update.message.reply_text("جنسیت شما؟", reply_markup=keyboard)
     return GENDER
 
 async def gender(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.replace("👦 ", "").replace("👧 ", "")
-    context.user_data["gender"] = text
-    await update.message.reply_text("🎂 سن شما؟ (حداقل ۱۸)", reply_markup=ReplyKeyboardRemove())
+    # این هندلر برای متن نیست - برای callback هست
+    await update.message.reply_text("لطفاً روی یکی از دکمه‌ها کلیک کن.")
+    return GENDER
+
+async def gender_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    g = query.data.replace("reg_gender_", "")
+    context.user_data["gender"] = g
+    await query.edit_message_text(f"✅ جنسیت: {g}\n\n🎂 سن شما؟ (حداقل ۱۸ بنویس)")
     return AGE
 
 async def age(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2031,33 +2038,56 @@ async def age(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ سن باید حداقل ۱۸ باشه:")
         return AGE
     context.user_data["age"] = int(text)
-    keyboard = [["تهران", "اصفهان", "مشهد"], ["شیراز", "تبریز", "اهواز"], ["سایر"]]
-    await update.message.reply_text(
-        "🗺 استان شما؟",
-        reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
-    )
+    rows = []
+    row = []
+    for p in PROVINCES:
+        row.append(InlineKeyboardButton(p, callback_data=f"reg_prov_{p}"))
+        if len(row) == 3:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    await update.message.reply_text("🗺 استان شما؟", reply_markup=InlineKeyboardMarkup(rows))
     return PROVINCE
 
 async def province(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["province"] = update.message.text
-    await update.message.reply_text("🏙 شهر شما؟", reply_markup=ReplyKeyboardRemove())
+    await update.message.reply_text("لطفاً روی یکی از دکمه‌ها کلیک کن.")
+    return PROVINCE
+
+async def province_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    p = query.data.replace("reg_prov_", "")
+    context.user_data["province"] = p
+    await query.edit_message_text(f"✅ استان: {p}\n\n🏙 شهر شما؟ (بنویس)")
     return CITY
 
 async def city(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["city"] = update.message.text
-    keyboard = [["🎵 موسیقی", "🎨 هنر", "📚 کتاب"], ["⚽ ورزش", "🎮 بازی", "🍕 غذا"], ["✈️ سفر", "🎬 فیلم", "💻 تکنولوژی"]]
-    await update.message.reply_text(
-        "✨ علایقت رو انتخاب کن:",
-        reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
-    )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🎵 موسیقی", callback_data="reg_int_موسیقی"),
+         InlineKeyboardButton("🎨 هنر", callback_data="reg_int_هنر"),
+         InlineKeyboardButton("📚 کتاب", callback_data="reg_int_کتاب")],
+        [InlineKeyboardButton("⚽ ورزش", callback_data="reg_int_ورزش"),
+         InlineKeyboardButton("🎮 بازی", callback_data="reg_int_بازی"),
+         InlineKeyboardButton("🍕 غذا", callback_data="reg_int_غذا")],
+        [InlineKeyboardButton("✈️ سفر", callback_data="reg_int_سفر"),
+         InlineKeyboardButton("🎬 فیلم", callback_data="reg_int_فیلم"),
+         InlineKeyboardButton("💻 تکنولوژی", callback_data="reg_int_تکنولوژی")]
+    ])
+    await update.message.reply_text("✨ علایقت رو انتخاب کن:", reply_markup=keyboard)
     return INTERESTS
 
 async def interests(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-    for emoji in ["🎵 ", "🎨 ", "📚 ", "⚽ ", "🎮 ", "🍕 ", "✈️ ", "🎬 ", "💻 "]:
-        text = text.replace(emoji, "")
-    context.user_data["interests"] = text
-    await update.message.reply_text("📸 عکس پروفایلت رو بفرست:", reply_markup=ReplyKeyboardRemove())
+    await update.message.reply_text("لطفاً روی یکی از دکمه‌ها کلیک کن.")
+    return INTERESTS
+
+async def interests_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    interest = query.data.replace("reg_int_", "")
+    context.user_data["interests"] = interest
+    await query.edit_message_text(f"✅ علاقه: {interest}\n\n📸 عکس پروفایلت رو بفرست:")
     return PHOTO
 
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2098,11 +2128,20 @@ def main():
         entry_points=[CommandHandler("register", register)],
         states={
             NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, name)],
-            GENDER: [MessageHandler(filters.TEXT & ~filters.COMMAND, gender)],
+            GENDER: [
+                CallbackQueryHandler(gender_callback, pattern="^reg_gender_"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, gender)
+            ],
             AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, age)],
-            PROVINCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, province)],
+            PROVINCE: [
+                CallbackQueryHandler(province_callback, pattern="^reg_prov_"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, province)
+            ],
             CITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, city)],
-            INTERESTS: [MessageHandler(filters.TEXT & ~filters.COMMAND, interests)],
+            INTERESTS: [
+                CallbackQueryHandler(interests_callback, pattern="^reg_int_"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, interests)
+            ],
             PHOTO: [MessageHandler(filters.PHOTO, photo), MessageHandler(filters.TEXT & ~filters.COMMAND, photo)],
         },
         fallbacks=[CommandHandler("cancel", cancel)]
