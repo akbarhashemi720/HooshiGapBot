@@ -670,8 +670,13 @@ async def search_type_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         return SEARCH_GENDER_NEW
 
     if "چت‌های اخیر" in search_type:
-        await update.message.reply_text("لغو شد.", reply_markup=main_menu())
-        return await recent_start(update, context)
+        context.user_data["search_type"] = "recent"
+        keyboard = [["پسر", "دختر", "همه"], ["🔙 بازگشت"]]
+        await update.message.reply_text(
+            "💬 چت‌های اخیر\nبا چه جنسیتی؟",
+            reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+        )
+        return SEARCH_GENDER_NEW
 
     if "GPS" in search_type:
         await update.message.reply_text("لغو شد.", reply_markup=main_menu())
