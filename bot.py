@@ -719,14 +719,14 @@ async def search_gender_new_handler(update: Update, context: ContextTypes.DEFAUL
     # جستجوی پیشرفته
     if context.user_data.get("in_advanced_search"):
         context.user_data["in_advanced_search"] = False
-        keyboard = [["هر سنی", "18-25", "26-35"], ["36-45", "46-60"], ["🔙 بازگشت"]]
-        await update.message.reply_text(
-            "🎂 بازه سنی؟",
-            reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
-        )
-        context.user_data["adv_gender"] = gender
-        context.user_data["in_adv_age"] = True
-        return SEARCH_GENDER_NEW
+        g = "همه"
+        if gender == "پسر":
+            g = "پسر"
+        elif gender == "دختر":
+            g = "دختر"
+        await update.message.reply_text("🔍 شروع جستجوی پیشرفته...", reply_markup=ReplyKeyboardRemove())
+        await start_advanced_search(update, context, g)
+        return ConversationHandler.END
 
     if "هم استانی" in search_type:
         my_profile = await get_user(my_id)
