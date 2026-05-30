@@ -134,15 +134,15 @@ async def get_user_stats():
 
 async def get_users_by_province(province, gender=None, limit=20):
     """دریافت کاربران هم استانی"""
-    params = f"province=eq.{province}&is_banned=eq.false&shadowban_level=eq.0"
+    params = f"province=eq.{province}"
     if gender:
         params += f"&gender=eq.{gender}"
-    params += f"&order=last_seen.desc&limit={limit}"
+    params += f"&limit={limit}"
     return await db_get("users", params)
 
 async def get_users_by_age(age, gender=None, limit=20):
     """دریافت کاربران هم سن"""
-    params = f"age=eq.{age}&is_banned=eq.false&shadowban_level=eq.0"
+    params = f"age=eq.{age}"
     if gender:
         params += f"&gender=eq.{gender}"
     params += f"&order=last_seen.desc&limit={limit}"
@@ -150,7 +150,7 @@ async def get_users_by_age(age, gender=None, limit=20):
 
 async def get_new_users(gender=None, limit=20):
     """دریافت کاربران جدید"""
-    params = "is_banned=eq.false&shadowban_level=eq.0&order=id.desc"
+    params = "order=id.desc"
     if gender:
         params += f"&gender=eq.{gender}"
     params += f"&limit={limit}"
@@ -158,7 +158,7 @@ async def get_new_users(gender=None, limit=20):
 
 async def get_popular_users(gender=None, limit=20):
     """دریافت کاربران محبوب بر اساس لایک"""
-    params = "is_banned=eq.false&shadowban_level=eq.0&order=like_count.desc"
+    params = "order=like_count.desc"
     if gender:
         params += f"&gender=eq.{gender}"
     params += f"&limit={limit}"
@@ -166,7 +166,7 @@ async def get_popular_users(gender=None, limit=20):
 
 async def get_users_without_chat(my_id, gender=None, limit=20):
     """دریافت کاربرانی که هنوز باهاشون چت نکردی"""
-    params = f"telegram_id=neq.{my_id}&is_banned=eq.false&shadowban_level=eq.0"
+    params = f"telegram_id=neq.{my_id}"
     if gender:
         params += f"&gender=eq.{gender}"
     params += f"&order=last_seen.desc&limit={limit}"
