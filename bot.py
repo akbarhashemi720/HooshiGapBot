@@ -613,6 +613,15 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif "معرفی به دوستان" in text:
         await invite(update, context)
     elif "لینک ناشناس" in text:
+        my_id = update.effective_user.id
+        link = f"https://t.me/{BOT_USERNAME}?start=anon_{my_id}"
+        await update.message.reply_text(
+            f"🎭 لینک ناشناس شما:\n{link}\n\n"
+            f"با این لینک هر کسی می‌تونه بهت پیام بده بدون اینکه بدونه کی هستی!",
+            reply_markup=main_menu()
+        )
+        return
+    elif "لینک ناشناس_unused" in text:
         await invite(update, context)
     elif "راهنما" in text:
         await update.message.reply_text(
@@ -709,6 +718,20 @@ async def search_gender_new_handler(update: Update, context: ContextTypes.DEFAUL
         users = await get_users_without_chat(my_id, gender, limit=50)
     elif "محبوب" in search_type:
         users = await get_popular_users(gender, limit=50)
+    elif "recent" in search_type:
+        gender = None
+        if "پسر" in update.message.text:
+            gender = "پسر"
+        elif "دختر" in update.message.text:
+            gender = "دختر"
+        found = await get_chat_history(my_id, gender if gender else "همه")
+        if not found:
+            await update.message.reply_text("❌ کسی پیدا نشد!", reply_markup=main_menu())
+            return ConversationHandler.END
+        context.user_data["search_results"] = found
+        context.user_data["search_page"] = 0
+        await show_search_page(update, context)
+        return ConversationHandler.END
     elif "direct" in search_type:
         # جستجو مستقیم با متن
         search_text = update.message.text.strip().replace("@", "")
@@ -768,7 +791,7 @@ async def show_search_page(update, context):
         await update.message.reply_text("برای دیدن بیشتر:", reply_markup=keyboard)
 
 async def search_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [["پسر", "دختر", "هر دو"]]
+    keyboard = [["پسر", "دختر", "هر دو"], ["🔙 بازگشت"]]
     await update.message.reply_text(
         f"🔍 جستجوی پیشرفته\n{BRAND_SEPARATOR}\nجنسیت مورد نظرت؟",
         reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
@@ -776,6 +799,9 @@ async def search_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return SEARCH_GENDER
 
 async def search_gender(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if "بازگشت" in update.message.text:
+        await update.message.reply_text("↩️ لغو شد.", reply_markup=main_menu())
+        return ConversationHandler.END
     context.user_data["search_gender"] = update.message.text
     keyboard = [["هر سنی", "18-25", "26-35"], ["36-45", "46-60"]]
     await update.message.reply_text("🎂 بازه سنی؟", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True))
