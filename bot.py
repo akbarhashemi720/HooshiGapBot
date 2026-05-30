@@ -1,8 +1,6 @@
 import os
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton, KeyboardButton
 from telegram.ext import Application, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, CallbackQueryHandler, filters
-import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
 
 from core import (
     get_user, user_exists, create_user, update_user, update_username,
@@ -30,19 +28,7 @@ from voice import (
     VOICE_MODE_REAL
 )
 
-class Handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"OK")
-    def log_message(self, *args):
-        pass
 
-def run_server():
-    port = int(os.environ.get("PORT", 10000))
-    HTTPServer(("0.0.0.0", port), Handler).serve_forever()
-
-threading.Thread(target=run_server, daemon=True).start()
 
 BOT_USERNAME = "HooshiGapBot"
 ADMIN_IDS = [7049305054]
@@ -1874,9 +1860,14 @@ def main():
     app.add_handler(MessageHandler(filters.ANIMATION, forward_media))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_handler))
     print("💜 هوشی‌گپ شروع به کار کرد...")
-    app.run_polling(
-        drop_pending_updates=True,
-        allowed_updates=Update.ALL_TYPES
+    PORT = int(os.environ.get("PORT", 10000))
+    WEBHOOK_URL = "https://hooshigapbot.onrender.com"
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        url_path=TOKEN,
+        webhook_url=f"{WEBHOOK_URL}/{TOKEN}",
+        drop_pending_updates=True
     )
 
 if __name__ == "__main__":
