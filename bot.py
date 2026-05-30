@@ -681,6 +681,7 @@ async def search_gender_new_handler(update: Update, context: ContextTypes.DEFAUL
     gender_text = update.message.text
 
     if "بازگشت" in gender_text:
+        context.user_data["in_advanced_search"] = False
         await update.message.reply_text("↩️ لغو شد.", reply_markup=main_menu())
         return ConversationHandler.END
 
@@ -694,7 +695,17 @@ async def search_gender_new_handler(update: Update, context: ContextTypes.DEFAUL
     my_id = update.effective_user.id
     search_type = context.user_data.get("search_type", "")
 
-    users = []
+    # جستجوی پیشرفته
+    if context.user_data.get("in_advanced_search"):
+        context.user_data["in_advanced_search"] = False
+        keyboard = [["هر سنی", "18-25", "26-35"], ["36-45", "46-60"], ["🔙 بازگشت"]]
+        await update.message.reply_text(
+            "🎂 بازه سنی؟",
+            reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+        )
+        context.user_data["adv_gender"] = gender
+        context.user_data["in_adv_age"] = True
+        return SEARCH_GENDER_NEW
 
     if "هم استانی" in search_type:
         my_profile = await get_user(my_id)
@@ -735,6 +746,57 @@ async def search_gender_new_handler(update: Update, context: ContextTypes.DEFAUL
                 search_query.lower() in str(u.get("display_name", "")).lower() or
                 search_query.lower() in str(u.get("username", "")).lower() or
                 search_query == str(u.get("telegram_id", ""))]
+
+    # هندل کردن سن در جستجوی پیشرفته
+    if context.user_data.get("in_adv_age"):
+        if "بازگشت" in gender_text:
+            context.user_data["in_adv_age"] = False
+            await update.message.reply_text("↩️ لغو شد.", reply_markup=main_menu())
+            return ConversationHandler.END
+        context.user_data["in_adv_age"] = False
+        sa = gender_text
+        adv_gender = context.user_data.get("adv_gender")
+        keyboard = [["تهران", "اصفهان", "مشهد"], ["شیراز", "تبریز", "سایر"], ["همه استان‌ها"], ["🔙 بازگشت"]]
+        await update.message.reply_text(
+            "🏙 استان؟",
+            reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+        )
+        context.user_data["adv_age"] = sa
+        context.user_data["in_adv_province"] = True
+        return SEARCH_GENDER_NEW
+
+    if context.user_data.get("in_adv_province"):
+        if "بازگشت" in gender_text:
+            context.user_data["in_adv_province"] = False
+            await update.message.reply_text("↩️ لغو شد.", reply_markup=main_menu())
+            return ConversationHandler.END
+        context.user_data["in_adv_province"] = False
+        sp = gender_text
+        adv_gender = context.user_data.get("adv_gender")
+        sa = context.user_data.get("adv_age", "هر سنی")
+        params = f"telegram_id=neq.{my_id}"
+        if adv_gender and adv_gender != "هر دو":
+            params += f"&gender=eq.{adv_gender}"
+        if sp != "همه استان‌ها":
+            params += f"&province=eq.{sp}"
+        if sa == "18-25":
+            params += "&age=gte.18&age=lte.25"
+        elif sa == "26-35":
+            params += "&age=gte.26&age=lte.35"
+        elif sa == "36-45":
+            params += "&age=gte.36&age=lte.45"
+        elif sa == "46-60":
+            params += "&age=gte.46&age=lte.60"
+        params += "&limit=50"
+        found = await db_get("users", params)
+        found = [u for u in found if u.get("telegram_id") != my_id]
+        if not found:
+            await update.message.reply_text("😔 کسی پیدا نشد!", reply_markup=main_menu())
+            return ConversationHandler.END
+        context.user_data["search_results"] = found
+        context.user_data["search_page"] = 0
+        await show_search_page(update, context)
+        return ConversationHandler.END
 
     # فیلتر کاربر خودش
     users = [u for u in users if u.get("telegram_id") != my_id]
