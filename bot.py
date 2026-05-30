@@ -661,8 +661,13 @@ async def search_type_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         return ConversationHandler.END
 
     if "جستجوی پیشرفته" in search_type:
-        await update.message.reply_text("لغو شد.", reply_markup=main_menu())
-        return await search_start(update, context)
+        context.user_data["in_advanced_search"] = True
+        keyboard = [["پسر", "دختر", "هر دو"], ["🔙 بازگشت"]]
+        await update.message.reply_text(
+            f"🔍 جستجوی پیشرفته\nجنسیت مورد نظرت؟",
+            reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+        )
+        return SEARCH_GENDER_NEW
 
     if "چت‌های اخیر" in search_type:
         await update.message.reply_text("لغو شد.", reply_markup=main_menu())
