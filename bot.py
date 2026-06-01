@@ -1724,6 +1724,132 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await start_advanced_search(update, context, gender)
         return
 
+    if query.data == "profile_gps":
+        from_id = update.effective_user.id
+        user = await get_user(from_id)
+        if user and user.get("latitude"):
+            lat = user.get("latitude")
+            lon = user.get("longitude")
+            await context.bot.send_location(chat_id=from_id, latitude=lat, longitude=lon)
+        else:
+            await query.answer("❌ موقعیت GPS ثبت نشده!", show_alert=True)
+        return
+
+    if query.data == "profile_likers":
+        from_id = update.effective_user.id
+        from core.users import db_get as _db_get
+        likers = await _db_get("likes", f"to_user=eq.{from_id}&select=from_user&limit=10")
+        if not likers:
+            await query.answer("❌ هنوز کسی لایک نکرده!", show_alert=True)
+            return
+        text = f"❤️ لایک کننده‌ها:\n{BRAND_SEPARATOR}\n"
+        for l in likers:
+            u = await get_user(l["from_user"])
+            if u:
+                text += f"• {u.get('display_name') or u.get('username') or str(u['telegram_id'])}\n"
+        await context.bot.send_message(chat_id=from_id, text=text)
+        return
+
+    if query.data == "profile_likes":
+        from_id = update.effective_user.id
+        coins = await get_coins(from_id)
+        user = await get_user(from_id)
+        like_count = user.get("like_count", 0) if user else 0
+        await query.answer(f"❤️ {like_count} لایک | 🪙 {coins} سکه", show_alert=True)
+        return
+
+    if query.data == "profile_contacts":
+        from_id = update.effective_user.id
+        from core.users import db_get as _db_get
+        contacts = await _db_get("contacts", f"user_id=eq.{from_id}&limit=20")
+        if not contacts:
+            await query.answer("❌ لیست مخاطبین خالیه!", show_alert=True)
+            return
+        await context.bot.send_message(chat_id=from_id, text=f"👫 لیست مخاطبین:\n{BRAND_SEPARATOR}")
+        for c in contacts:
+            u = await get_user(c["contact_id"])
+            if u:
+                like_count = u.get("like_count", 0)
+                keyboard = user_action_keyboard(u["telegram_id"], like_count)
+                text = format_profile_card(u)
+                if u.get("photo_id"):
+                    await context.bot.send_photo(chat_id=from_id, photo=u["photo_id"], caption=text, reply_markup=keyboard, parse_mode="HTML")
+                else:
+                    await context.bot.send_message(chat_id=from_id, text=text, reply_markup=keyboard, parse_mode="HTML")
+        return
+
+    if query.data == "profile_blocked":
+        from_id = update.effective_user.id
+        blocked_ids = await get_blocked_ids(from_id)
+        if not blocked_ids:
+            await query.answer("❌ کسی رو بلاک نکردی!", show_alert=True)
+            return
+        await context.bot.send_message(chat_id=from_id, text=f"🚫 بلاک شده‌ها:\n{BRAND_SEPARATOR}")
+        for bid in blocked_ids[:10]:
+            u = await get_user(bid)
+            if u:
+                keyboard = InlineKeyboardMarkup([[
+                    InlineKeyboardButton("✅ آنبلاک", callback_data=f"unblock_{bid}")
+                ]])
+                text = format_profile_card(u, show_link=False)
+                await context.bot.send_message(chat_id=from_id, text=text, reply_markup=keyboard, parse_mode="HTML")
+        return
+
+    if query.data == "profile_settings":
+        from_id = update.effective_user.id
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🎤 ویس پروفایل", callback_data="settings_voice")],
+            [InlineKeyboardButton("🔔 اطلاع‌رسانی‌ها", callback_data="settings_notif")],
+            [InlineKeyboardButton("🗑 حذف حساب", callback_data="settings_delete")]
+        ])
+        await context.bot.send_message(
+            chat_id=from_id,
+            text=f"⚙️ تنظیمات پیشرفته\n{BRAND_SEPARATOR}",
+            reply_markup=keyboard
+        )
+        return
+
+    if query.data == "settings_voice":
+        from_id = update.effective_user.id
+        voice = await get_voice_profile(from_id)
+        if voice:
+            mode = voice.get("voice_mode", VOICE_MODE_REAL)
+            label = get_voice_label(mode)
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("▶️ پخش ویس", callback_data="play_my_voice")],
+                [InlineKeyboardButton("🔄 جایگزینی", callback_data="replace_voice"),
+                 InlineKeyboardButton("🗑 حذف", callback_data="delete_voice")],
+                [InlineKeyboardButton("🔒 تغییر حریم خصوصی", callback_data="change_voice_mode")]
+            ])
+            await context.bot.send_message(chat_id=from_id, text=f"🎤 ویس پروفایل\nحالت: {label}", reply_markup=keyboard)
+        else:
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🎤 اضافه کردن ویس", callback_data="add_voice")]])
+            await context.bot.send_message(chat_id=from_id, text="🎤 ویس پروفایل نداری!", reply_markup=keyboard)
+        return
+
+    if query.data == "settings_delete":
+        from_id = update.effective_user.id
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ بله، حذف شود", callback_data="confirm_delete"),
+             InlineKeyboardButton("❌ انصراف", callback_data="cancel_delete")]
+        ])
+        await context.bot.send_message(chat_id=from_id, text="⚠️ آیا مطمئنی؟ حساب کاربری حذف میشه!", reply_markup=keyboard)
+        return
+
+    if query.data == "confirm_delete":
+        from_id = update.effective_user.id
+        from core.users import db_delete as _db_delete
+        import httpx
+        headers = {"apikey": "sb_publishable_DBlfUH3YcVEsCJ2m-3tOWg_nJNMBh5R", "Authorization": f"Bearer sb_publishable_DBlfUH3YcVEsCJ2m-3tOWg_nJNMBh5R"}
+        async with httpx.AsyncClient() as client:
+            await client.delete(f"https://ahjdziimhlpynvvwhgiz.supabase.co/rest/v1/users?telegram_id=eq.{from_id}", headers=headers)
+        await context.bot.send_message(chat_id=from_id, text="✅ حساب کاربری حذف شد.", reply_markup=ReplyKeyboardRemove())
+        return
+
+    if query.data == "cancel_delete":
+        await query.answer("❌ انصراف داده شد.")
+        return
+
     if query.data.startswith("search_next_"):
         page = int(query.data.split("_")[2])
         context.user_data["search_page"] = page
@@ -2092,7 +2218,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     coins = await get_coins(my_id)
     trust = await get_trust(my_id)
     trust_score = trust.get("trust_score", 50)
-    vip_badge = "⭐️ VIP\n" if user.get("is_vip") else ""
+    vip_badge = "⭐️ VIP " if user.get("is_vip") else ""
     voice_info = ""
     if user.get("has_voice"):
         mode = user.get("voice_mode", VOICE_MODE_REAL)
@@ -2101,26 +2227,40 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     gender_emoji = "👦" if user.get("gender") == "پسر" else "👧"
     display_name = user.get("display_name", "")
     like_count = user.get("like_count", 0)
-    name_line = f"✨ {display_name}\n" if display_name else ""
-    text = (
-        f"💜 پروفایل من\n"
-        f"{BRAND_SEPARATOR}\n"
-        f"{vip_badge}{voice_info}"
-        f"{name_line}"
-        f"🆔 آیدی: {my_id}\n"
-        f"{gender_emoji} جنسیت: {user['gender']}\n"
-        f"🎂 سن: {user['age']}\n"
-        f"🗺 استان: {user['province']}\n"
-        f"🏙 شهر: {user['city']}\n"
-        f"✨ علایق: {user['interests']}\n"
-        f"❤️ لایک: {like_count}\n"
-        f"🪙 سکه: {coins}\n"
-        f"💜 امتیاز اعتماد: {trust_score}/100\n"
-        f"{BRAND_SEPARATOR}"
-    )
+    username = user.get("username", "")
+    online_status = get_online_status_text(user)
+
+    lines = []
+    if vip_badge:
+        lines.append(f"• نام: {display_name} {vip_badge}" if display_name else f"• {vip_badge}")
+    elif display_name:
+        lines.append(f"• نام: {display_name}")
+    lines.append(f"• {gender_emoji} جنسیت: {user.get('gender', '-')}")
+    lines.append(f"• 🗺 استان: {user.get('province', '-')}")
+    lines.append(f"• 🏙 شهر: {user.get('city', '-')}")
+    lines.append(f"• 🎂 سن: {user.get('age', '-')}")
+    lines.append("")
+    lines.append(f"• ❤️ تعداد لایک ها: {like_count}")
+    lines.append("")
+    lines.append(f"{online_status}")
+    lines.append("")
+    if username:
+        lines.append(f"🆔 آیدی : /{username}")
+    lines.append(f"🪙 سکه: {coins}")
+    lines.append(f"💜 امتیاز اعتماد: {trust_score}/100")
+
+    text = "\n".join(lines)
+
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("✏️ ویرایش پروفایل", callback_data="edit_profile_btn")]
+        [InlineKeyboardButton("📍 مشاهده موقعیت GPS من", callback_data="profile_gps")],
+        [InlineKeyboardButton("❤️ مشاهده لایک کننده‌ها", callback_data="profile_likers"),
+         InlineKeyboardButton("✅ لایک (فعال)", callback_data="profile_likes")],
+        [InlineKeyboardButton("👫 لیست مخاطبین", callback_data="profile_contacts"),
+         InlineKeyboardButton("🚫 بلاک شده‌ها", callback_data="profile_blocked")],
+        [InlineKeyboardButton("⚙️ تنظیمات پیشرفته", callback_data="profile_settings")],
+        [InlineKeyboardButton("✏️ ویرایش اطلاعات پروفایل", callback_data="edit_profile_btn")]
     ])
+
     if user.get("photo_id"):
         await update.message.reply_photo(photo=user["photo_id"], caption=text, reply_markup=keyboard)
     else:
