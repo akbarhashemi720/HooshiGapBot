@@ -2541,19 +2541,15 @@ def main():
     app.add_handler(MessageHandler(filters.ANIMATION, forward_media))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_handler))
     print("💜 هوشی‌گپ شروع به کار کرد...")
-    import asyncio
     import httpx
+    import requests
 
-    # اول webhook رو پاک کن
-    async def delete_webhook():
-        try:
-            async with httpx.AsyncClient() as client:
-                await client.get(f"https://api.telegram.org/bot{TOKEN}/deleteWebhook?drop_pending_updates=true")
-                print("✅ Webhook deleted")
-        except:
-            pass
-
-    asyncio.run(delete_webhook())
+    # اول webhook رو پاک کن با requests (sync)
+    try:
+        requests.get(f"https://api.telegram.org/bot{TOKEN}/deleteWebhook?drop_pending_updates=true", timeout=5)
+        print("✅ Webhook deleted")
+    except:
+        pass
 
     # بعد HTTP server رو شروع کن
     import threading
