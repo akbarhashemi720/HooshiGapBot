@@ -453,6 +453,26 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if handled:
         return
 
+    # هندل کردن جستجوی نزدیک با GPS
+    if context.user_data.get("waiting_nearby_location") and update.message.location:
+        context.user_data["waiting_nearby_location"] = False
+        from core.users import db_get as _db_get
+        my_id = update.effective_user.id
+        my_lat = update.message.location.latitude
+        my_lon = update.message.location.longitude
+        max_km = context.user_data.get("nearby_km", 10)
+        await update_user_location(my_id, my_lat, my_lon)
+        all_users = await _db_get("users", f"telegram_id=neq.{my_id}&latitude=not.is.null")
+        nearby_users = filter_nearby_users(all_users, my_lat, my_lon, max_km)
+        if not nearby_users:
+            await update.message.reply_text(f"😔 کسی در {max_km} کیلومتر پیدا نشد!", reply_markup=main_menu())
+            return
+        context.user_data["search_results"] = nearby_users
+        context.user_data["search_page"] = 0
+        await update.message.reply_text(f"✅ {len(nearby_users)} نفر در {max_km} کیلومتر پیدا شد!", reply_markup=main_menu())
+        await show_search_page_inline(update, context, my_id)
+        return
+
     # هندل کردن VIP broadcast
     if context.user_data.get("vip_action"):
         vip_action = context.user_data.get("vip_action")
@@ -1062,12 +1082,18 @@ async def edit_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def nearby_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [["5 km", "10 km"], ["30 km", "60 km"]]
-    await update.message.reply_text(
-        f"📍 افراد نزدیک\n{BRAND_SEPARATOR}\nتا چه فاصله‌ای؟",
-        reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
-    )
-    return NEARBY_DISTANCE
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("5 km", callback_data="nearby_5"),
+         InlineKeyboardButton("10 km", callback_data="nearby_10")],
+        [InlineKeyboardButton("30 km", callback_data="nearby_30"),
+         InlineKeyboardButton("60 km", callback_data="nearby_60")]
+    ])
+    if hasattr(update, 'message') and update.message:
+        await update.message.reply_text(
+            f"📍 افراد نزدیک\nتا چه فاصله‌ای؟",
+            reply_markup=keyboard
+        )
+    return ConversationHandler.END
 
 async def nearby_distance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.lower().replace(" km", "").replace("km", "").strip()
@@ -1466,6 +1492,17 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "done":
         await query.answer()
+        return
+
+    if query.data.startswith("nearby_"):
+        km = int(query.data.replace("nearby_", ""))
+        from_id = update.effective_user.id
+        context.user_data["nearby_km"] = km
+        location_button = KeyboardButton("📍 ارسال موقعیت", request_location=True)
+        keyboard = ReplyKeyboardMarkup([[location_button]], one_time_keyboard=True, resize_keyboard=True)
+        await query.edit_message_text(f"📍 فاصله: {km} کیلومتر\nموقعیتت رو بفرست:")
+        await context.bot.send_message(chat_id=from_id, text="📍 موقعیتت رو بفرست:", reply_markup=keyboard)
+        context.user_data["waiting_nearby_location"] = True
         return
 
     if query.data == "ns_back":
