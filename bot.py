@@ -1814,6 +1814,47 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_message(chat_id=from_id, text=text, reply_markup=keyboard, parse_mode="HTML")
         return
 
+    if query.data == "profile_silent":
+        from_id = update.effective_user.id
+        user = await get_user(from_id)
+        is_silent = user.get("is_silent", False) if user else False
+        if is_silent:
+            # غیرفعال کردن سایلنت
+            await update_user(from_id, {"is_silent": False, "silent_until": None})
+            await query.answer("🔔 حالت سایلنت غیرفعال شد!", show_alert=True)
+        else:
+            # نمایش گزینه‌های سایلنت
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔕 سایلنت تا 30 دقیقه", callback_data="silent_30m"),
+                 InlineKeyboardButton("🔕 سایلنت تا یک ساعت", callback_data="silent_1h")],
+                [InlineKeyboardButton("🔕 همیشه سایلنت", callback_data="silent_forever")],
+                [InlineKeyboardButton("🔔 غیرفعال کردن سایلنت", callback_data="silent_off")]
+            ])
+            await query.edit_message_reply_markup(reply_markup=keyboard)
+        return
+
+    if query.data.startswith("silent_"):
+        from_id = update.effective_user.id
+        val = query.data.replace("silent_", "")
+        from datetime import datetime, timedelta, timezone
+        now = datetime.now(timezone.utc)
+
+        if val == "off":
+            await update_user(from_id, {"is_silent": False, "silent_until": None})
+            await query.answer("🔔 سایلنت غیرفعال شد!", show_alert=True)
+        elif val == "30m":
+            until = (now + timedelta(minutes=30)).isoformat()
+            await update_user(from_id, {"is_silent": True, "silent_until": until})
+            await query.answer("🔕 سایلنت تا 30 دقیقه فعال شد!", show_alert=True)
+        elif val == "1h":
+            until = (now + timedelta(hours=1)).isoformat()
+            await update_user(from_id, {"is_silent": True, "silent_until": until})
+            await query.answer("🔕 سایلنت تا یک ساعت فعال شد!", show_alert=True)
+        elif val == "forever":
+            await update_user(from_id, {"is_silent": True, "silent_until": None})
+            await query.answer("🔕 همیشه سایلنت فعال شد!", show_alert=True)
+        return
+
     if query.data == "profile_settings":
         from_id = update.effective_user.id
         keyboard = InlineKeyboardMarkup([
@@ -1989,6 +2030,31 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data.startswith("chatreq_"):
         to_id = int(query.data.split("_")[1])
         from_id = update.effective_user.id
+
+        # چک کردن سایلنت
+        to_user = await get_user(to_id)
+        if to_user and to_user.get("is_silent"):
+            from datetime import datetime, timezone
+            silent_until = to_user.get("silent_until")
+            if silent_until:
+                try:
+                    if silent_until.endswith("Z"):
+                        silent_until = silent_until[:-1] + "+00:00"
+                    until_dt = datetime.fromisoformat(silent_until)
+                    if until_dt.tzinfo is None:
+                        until_dt = until_dt.replace(tzinfo=timezone.utc)
+                    if datetime.now(timezone.utc) > until_dt:
+                        # سایلنت منقضی شده
+                        await update_user(to_id, {"is_silent": False, "silent_until": None})
+                    else:
+                        await query.answer("🔕 این کاربر در حالت سایلنت است و درخواست چت دریافت نمی‌کند!", show_alert=True)
+                        return
+                except:
+                    pass
+            else:
+                await query.answer("🔕 این کاربر در حالت سایلنت است و درخواست چت دریافت نمی‌کند!", show_alert=True)
+                return
+
         my_profile = await get_user(from_id)
         if my_profile:
             vip_badge = "⭐️ VIP  " if my_profile.get("is_vip") else ""
@@ -2267,8 +2333,14 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines.append(f"🆔 آیدی : /{username}")
     lines.append(f"🪙 سکه: {coins}")
     lines.append(f"💜 امتیاز اعتماد: {trust_score}/100")
+    if user.get("is_silent"):
+        lines.append(f"🔕 حالت سایلنت: فعال")
 
     text = "\n".join(lines)
+
+    # وضعیت سایلنت
+    is_silent = user.get("is_silent", False)
+    silent_text = "🔕 حالت سایلنت (فعال)" if is_silent else "🔔 حالت سایلنت (غیرفعال)"
 
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("📍 مشاهده موقعیت GPS من", callback_data="profile_gps")],
@@ -2276,6 +2348,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
          InlineKeyboardButton("✅ لایک (فعال)", callback_data="profile_likes")],
         [InlineKeyboardButton("👫 لیست مخاطبین", callback_data="profile_contacts"),
          InlineKeyboardButton("🚫 بلاک شده‌ها", callback_data="profile_blocked")],
+        [InlineKeyboardButton(silent_text, callback_data="profile_silent")],
         [InlineKeyboardButton("⚙️ تنظیمات پیشرفته", callback_data="profile_settings")],
         [InlineKeyboardButton("✏️ ویرایش اطلاعات پروفایل", callback_data="edit_profile_btn")]
     ])
