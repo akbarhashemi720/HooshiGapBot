@@ -634,22 +634,24 @@ async def search_type_handler_advanced(update: Update, context: ContextTypes.DEF
     return SEARCH_GENDER_NEW
 
 async def new_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """منوی جستجوی جدید"""
-    keyboard = [
-        ["💌 به مخاطب خاصم وصلم کن"],
-        ["👫 هم سن‌ها", "🎯 هم استانی‌ها"],
-        ["💬 جستجوی پیشرفته"],
-        ["🚶 بدون چت‌ها", "👰 کاربران جدید"],
-        ["👀 چت‌های اخیر من"],
-        ["📍 جستجو با GPS فعلی من"],
-        ["❤️ کاربران محبوب بر اساس لایک"],
-        ["🔙 بازگشت"]
-    ]
+    """منوی جستجوی جدید - Inline"""
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("💌 به مخاطب خاصم وصلم کن", callback_data="ns_direct")],
+        [InlineKeyboardButton("👫 هم سن‌ها", callback_data="ns_age"),
+         InlineKeyboardButton("🎯 هم استانی‌ها", callback_data="ns_province")],
+        [InlineKeyboardButton("💬 جستجوی پیشرفته", callback_data="ns_advanced")],
+        [InlineKeyboardButton("🚶 بدون چت‌ها", callback_data="ns_nochat"),
+         InlineKeyboardButton("👰 کاربران جدید", callback_data="ns_new")],
+        [InlineKeyboardButton("👀 چت‌های اخیر من", callback_data="ns_recent")],
+        [InlineKeyboardButton("📍 جستجو با GPS فعلی من", callback_data="ns_gps")],
+        [InlineKeyboardButton("❤️ کاربران محبوب بر اساس لایک", callback_data="ns_popular")],
+        [InlineKeyboardButton("🔙 بازگشت", callback_data="ns_back")]
+    ])
     await update.message.reply_text(
         "🔍 جستجو کاربران\nچه کسایی رو نشونت بدم؟ انتخاب کن",
-        reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+        reply_markup=keyboard
     )
-    return SEARCH_TYPE
+    return ConversationHandler.END
 
 async def search_type_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """هندل کردن نوع جستجو"""
@@ -1126,6 +1128,14 @@ async def recent_gender(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
+
+def get_search_gender_keyboard(search_type):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("👦 پسر", callback_data=f"sg_پسر_{search_type}"),
+         InlineKeyboardButton("👧 دختر", callback_data=f"sg_دختر_{search_type}"),
+         InlineKeyboardButton("👥 همه", callback_data=f"sg_همه_{search_type}")]
+    ])
+
 # ==================== جستجوی پیشرفته Inline ====================
 
 PROVINCES = [
@@ -1456,6 +1466,89 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "done":
         await query.answer()
+        return
+
+    if query.data == "ns_back":
+        await query.edit_message_text("↩️ لغو شد.")
+        await context.bot.send_message(chat_id=update.effective_user.id, text="به منو برگشتی.", reply_markup=main_menu())
+        return
+
+    if query.data in ["ns_age", "ns_province", "ns_nochat", "ns_new", "ns_recent", "ns_popular"]:
+        await query.edit_message_text(
+            "جنسیت مورد نظر؟",
+            reply_markup=get_search_gender_keyboard(query.data.replace("ns_", ""))
+        )
+        return
+
+    if query.data == "ns_advanced":
+        await query.edit_message_text(
+            "🔍 جستجوی پیشرفته\nجنسیت مورد نظر؟",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("👦 پسر", callback_data="adv_start_پسر"),
+                 InlineKeyboardButton("👧 دختر", callback_data="adv_start_دختر"),
+                 InlineKeyboardButton("👥 همه", callback_data="adv_start_همه")]
+            ])
+        )
+        return
+
+    if query.data.startswith("adv_start_"):
+        gender = query.data.replace("adv_start_", "")
+        await query.edit_message_text(f"🔍 جستجوی پیشرفته\nجنسیت: {gender}")
+        await start_advanced_search(update, context, gender)
+        return
+
+    if query.data == "ns_gps":
+        from_id = update.effective_user.id
+        location_button = KeyboardButton("📍 ارسال موقعیت", request_location=True)
+        keyboard = ReplyKeyboardMarkup([[location_button]], one_time_keyboard=True, resize_keyboard=True)
+        await context.bot.send_message(chat_id=from_id, text="📍 موقعیتت رو بفرست:", reply_markup=keyboard)
+        context.user_data["waiting_location_search"] = True
+        return
+
+    if query.data == "ns_direct":
+        from_id = update.effective_user.id
+        context.user_data["search_type"] = "direct"
+        await context.bot.send_message(chat_id=from_id, text="💌 آیدی یا یوزرنیم مخاطب رو بنویس:", reply_markup=ReplyKeyboardRemove())
+        context.user_data["waiting_direct_search"] = True
+        return
+
+    if query.data.startswith("sg_"):
+        parts = query.data.split("_")
+        gender = parts[1]
+        search_type = parts[2]
+        from_id = update.effective_user.id
+        my_id = from_id
+        users = []
+
+        if search_type == "age":
+            my_profile = await get_user(my_id)
+            if my_profile:
+                users = await get_users_by_age(my_profile["age"], gender if gender != "همه" else None, limit=50)
+        elif search_type == "province":
+            my_profile = await get_user(my_id)
+            if my_profile:
+                users = await get_users_by_province(my_profile["province"], gender if gender != "همه" else None, limit=50)
+        elif search_type == "nochat":
+            users = await get_users_without_chat(my_id, gender if gender != "همه" else None, limit=50)
+        elif search_type == "new":
+            users = await get_new_users(gender if gender != "همه" else None, limit=50)
+        elif search_type == "popular":
+            users = await get_popular_users(gender if gender != "همه" else None, limit=50)
+        elif search_type == "recent":
+            found = await get_chat_history(my_id, gender if gender != "همه" else "همه")
+            users = found if found else []
+
+        users = [u for u in users if u.get("telegram_id") != my_id]
+
+        if not users:
+            await query.edit_message_text("😔 کسی پیدا نشد!")
+            await context.bot.send_message(chat_id=from_id, text="به منو برگشتی.", reply_markup=main_menu())
+            return
+
+        context.user_data["search_results"] = users
+        context.user_data["search_page"] = 0
+        await query.edit_message_text(f"✅ {len(users)} نفر پیدا شد!")
+        await show_search_page_inline(update, context, from_id)
         return
 
     # جستجوی پیشرفته inline
