@@ -1572,7 +1572,13 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
         users = await _db_get("users", params)
 
         if not users:
-            await query.edit_message_text("😔 کسی پیدا نشد! فیلترها رو تغییر بده.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 جستجوی جدید", callback_data="new_adv_search")]]))
+            await query.edit_message_text(
+                "😔 کسی پیدا نشد! فیلترها رو تغییر بده.",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔙 جستجوی جدید", callback_data="new_adv_search")
+                ]])
+            )
+            await context.bot.send_message(chat_id=from_id, text="به منو برگشتی.", reply_markup=main_menu())
             return
 
         context.user_data["search_results"] = users
