@@ -4,3 +4,4 @@ supabase
 fastapi
 uvicorn
 httpx
+requests
