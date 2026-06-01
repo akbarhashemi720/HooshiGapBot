@@ -277,6 +277,25 @@ async def end_chat_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def forward_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
     my_id = update.effective_user.id
     if not is_in_chat(my_id):
+        # هندل کردن location برای جستجوی نزدیک
+        if update.message.location and context.user_data.get("waiting_nearby_location"):
+            context.user_data["waiting_nearby_location"] = False
+            from core.users import db_get as _db_get
+            my_lat = update.message.location.latitude
+            my_lon = update.message.location.longitude
+            max_km = context.user_data.get("nearby_km", 10)
+            await update_user_location(my_id, my_lat, my_lon)
+            all_users = await _db_get("users", f"telegram_id=neq.{my_id}&latitude=not.is.null")
+            nearby_users = filter_nearby_users(all_users, my_lat, my_lon, max_km)
+            if not nearby_users:
+                await update.message.reply_text(f"😔 کسی در {max_km} کیلومتر پیدا نشد!", reply_markup=main_menu())
+                return
+            context.user_data["search_results"] = nearby_users
+            context.user_data["search_page"] = 0
+            await update.message.reply_text(f"✅ {len(nearby_users)} نفر در {max_km} کیلومتر!", reply_markup=main_menu())
+            await show_search_page_inline(update, context, my_id)
+            return
+
         if update.message.photo and context.user_data.get("waiting_edit_value") and context.user_data.get("edit_field") == "عکس":
             photo_id = update.message.photo[-1].file_id
             await update_user(my_id, {"photo_id": photo_id})
@@ -2513,6 +2532,7 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_like))
     app.add_handler(MessageHandler(filters.PHOTO, forward_media))
     app.add_handler(MessageHandler(filters.VIDEO, forward_media))
+    app.add_handler(MessageHandler(filters.LOCATION, forward_media))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice_in_chat))
     app.add_handler(MessageHandler(filters.AUDIO, forward_media))
     app.add_handler(MessageHandler(filters.Sticker.ALL, forward_media))
@@ -2533,7 +2553,7 @@ def main():
         except:
             pass
 
-    asyncio.get_event_loop().run_until_complete(delete_webhook())
+    asyncio.run(delete_webhook())
 
     # بعد HTTP server رو شروع کن
     import threading
