@@ -138,6 +138,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"👥 کل کاربران: {stats['total']}\n"
         f"⭐️ کاربران VIP: {stats['vip']}\n"
         f"🎤 دارای ویس: {stats['voice']}\n"
+        f"🚫 بن‌شده‌ها: {stats.get('banned', 0)}\n"
         f"{BRAND_SEPARATOR}"
     )
     keyboard = InlineKeyboardMarkup([
@@ -145,7 +146,10 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
          InlineKeyboardButton("⚠️ گزارش‌ها", callback_data="admin_reports")],
         [InlineKeyboardButton("🚫 بن کاربر", callback_data="admin_ban"),
          InlineKeyboardButton("✅ آنبن کاربر", callback_data="admin_unban")],
-        [InlineKeyboardButton("💰 اضافه کردن سکه", callback_data="admin_coins")],
+        [InlineKeyboardButton("👻 shadowban کاربر", callback_data="admin_shadowban"),
+         InlineKeyboardButton("✨ رفع shadowban", callback_data="admin_unshadowban")],
+        [InlineKeyboardButton("💰 اضافه کردن سکه", callback_data="admin_coins"),
+         InlineKeyboardButton("👑 دادن VIP", callback_data="admin_vip")],
         [InlineKeyboardButton("📢 پیام به همه", callback_data="admin_broadcast")],
         [InlineKeyboardButton("🔍 جزئیات کاربر", callback_data="admin_detail")],
     ])
@@ -413,6 +417,45 @@ async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         context.user_data["admin_action"] = None
         return True
+    elif action == "shadowban":
+        try:
+            user_id = int(text)
+            await shadowban(user_id, level=1, reason="توسط ادمین")
+            await update.message.reply_text(f"👻 کاربر {user_id} shadowban شد!", reply_markup=main_menu())
+            try:
+                await context.bot.send_message(chat_id=user_id, text="⚠️ حساب شما محدود شده است.")
+            except:
+                pass
+        except:
+            await update.message.reply_text("❌ آیدی نامعتبر!", reply_markup=main_menu())
+        context.user_data["admin_action"] = None
+        return True
+    elif action == "unshadowban":
+        try:
+            user_id = int(text)
+            await remove_shadowban(user_id)
+            await update.message.reply_text(f"✅ shadowban کاربر {user_id} برداشته شد!", reply_markup=main_menu())
+            try:
+                await context.bot.send_message(chat_id=user_id, text="✅ محدودیت حساب شما برطرف شد.")
+            except:
+                pass
+        except:
+            await update.message.reply_text("❌ آیدی نامعتبر!", reply_markup=main_menu())
+        context.user_data["admin_action"] = None
+        return True
+    elif action == "vip":
+        try:
+            user_id = int(text)
+            await set_vip(user_id, True)
+            await update.message.reply_text(f"👑 VIP به کاربر {user_id} داده شد!", reply_markup=main_menu())
+            try:
+                await context.bot.send_message(chat_id=user_id, text="👑 تبریک! حساب شما VIP شد! ⭐️")
+            except:
+                pass
+        except:
+            await update.message.reply_text("❌ آیدی نامعتبر!", reply_markup=main_menu())
+        context.user_data["admin_action"] = None
+        return True
     elif action == "detail":
         try:
             user_id = int(text)
@@ -451,6 +494,12 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if "پایان دادن چت" in text:
         await end_chat_cmd(update, context)
         return
+
+    # ادمین همیشه اول چک می‌شه — حتی توی چت
+    if my_id in ADMIN_IDS and context.user_data.get("admin_action"):
+        handled = await handle_admin_text(update, context)
+        if handled:
+            return
 
     if is_in_chat(my_id):
         partner_id = get_partner(my_id)
@@ -1345,6 +1394,30 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         await context.bot.send_message(chat_id=from_id, text="🆔 آیدی عددی کاربر مورد نظر:")
         context.user_data["admin_action"] = "detail"
+        return
+
+    if query.data == "admin_shadowban":
+        from_id = update.effective_user.id
+        if from_id not in ADMIN_IDS:
+            return
+        await context.bot.send_message(chat_id=from_id, text="🆔 آیدی عددی کاربر برای shadowban (سطح ۱):")
+        context.user_data["admin_action"] = "shadowban"
+        return
+
+    if query.data == "admin_unshadowban":
+        from_id = update.effective_user.id
+        if from_id not in ADMIN_IDS:
+            return
+        await context.bot.send_message(chat_id=from_id, text="🆔 آیدی عددی کاربر برای رفع shadowban:")
+        context.user_data["admin_action"] = "unshadowban"
+        return
+
+    if query.data == "admin_vip":
+        from_id = update.effective_user.id
+        if from_id not in ADMIN_IDS:
+            return
+        await context.bot.send_message(chat_id=from_id, text="🆔 آیدی عددی کاربر برای دادن VIP:")
+        context.user_data["admin_action"] = "vip"
         return
 
     if query.data.startswith("vmode_"):
