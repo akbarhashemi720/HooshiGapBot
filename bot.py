@@ -2704,6 +2704,11 @@ async def skip_photo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     await query.edit_message_text(
         f"💜 ثبت‌نام کامل شد!\n🎁 ۱۰ سکه هدیه گرفتی!"
     )
+    await context.bot.send_message(
+        chat_id=update.effective_user.id,
+        text=f"🤖 هوشی‌گپ AI منتظر مچ کردنته!\n{BRAND_SEPARATOR}\n{BRAND_FOOTER}",
+        reply_markup=main_menu()
+    )
     return ConversationHandler.END
 
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
