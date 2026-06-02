@@ -2760,7 +2760,8 @@ def main():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, photo)
             ],
         },
-        fallbacks=[CommandHandler("cancel", cancel)]
+        fallbacks=[CommandHandler("cancel", cancel)],
+        per_message=False
     )
 
     search_conv = ConversationHandler(
