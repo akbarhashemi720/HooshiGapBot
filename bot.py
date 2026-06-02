@@ -782,7 +782,7 @@ async def search_type_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     if "مخاطب خاصم" in search_type:
         await update.message.reply_text(
             "❤️ به مخاطب خاصم وصلم کن\nاسم یا آیدی مخاطب رو بنویس:",
-            reply_markup=ReplyKeyboardRemove()
+            reply_markup=ReplyKeyboardMarkup([["🔙 بازگشت"]], resize_keyboard=True)
         )
         context.user_data["search_type"] = "مخاطب خاص"
         return SEARCH_GENDER_NEW
@@ -858,7 +858,11 @@ async def search_gender_new_handler(update: Update, context: ContextTypes.DEFAUL
             return ConversationHandler.END
     elif "مخاطب خاص" in search_type:
         # جستجو بر اساس نام یا آیدی
-        search_query = gender_text  # اینجا text همون ورودی کاربره
+        if "بازگشت" in gender_text:
+            context.user_data["search_type"] = None
+            await update.message.reply_text("↩️ لغو شد.", reply_markup=main_menu())
+            return ConversationHandler.END
+        search_query = gender_text
         all_users = await db_get("users", f"telegram_id=neq.{my_id}&is_banned=eq.false&limit=50")
         users = [u for u in all_users if 
                 search_query.lower() in str(u.get("display_name", "")).lower() or
@@ -2375,6 +2379,8 @@ async def send_dm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def browse(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from core.users import db_get
+    import random
     my_id = update.effective_user.id
 
     # چک ثبت‌نام
@@ -2385,19 +2391,23 @@ async def browse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not check_queue_limit(my_id):
         await update.message.reply_text("⚠️ خیلی سریع! کمی صبر کنید.")
         return
-    coins = await get_coins(my_id)
-    if coins <= 0:
-        await update.message.reply_text(
-            f"❌ سکه کافی نداری!\n{BRAND_SEPARATOR}\n💰 از کیف پول سکه بگیر"
-        )
-        return
+
     blocked_ids = await get_blocked_ids(my_id)
+
+    # اول smart matches امتحان کن
     users = await get_smart_matches(my_id, blocked_ids, limit=5)
+
+    # اگه نتیجه نداد، ساده بگرد
+    if not users:
+        users = await db_get("users", f"telegram_id=neq.{my_id}&is_banned=eq.false&shadowban_level=eq.0")
+        if blocked_ids:
+            users = [u for u in users if u["telegram_id"] not in blocked_ids]
+
     if not users:
         await update.message.reply_text("😔 فعلا کاربر جدیدی نیست!")
         return
-    user = users[0]
-    await deduct_coin(my_id)
+
+    user = random.choice(users)
     await send_user_card(update, user)
     if user.get("has_voice"):
         await send_voice_profile(context.bot, my_id, user, is_matched=False)
