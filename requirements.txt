@@ -1,5 +1,4 @@
-python-telegram-bot==20.7
-httpx==0.25.2
+python-telegram-bot==21.0
 pygeohash==3.2.2
 requests==2.31.0
-supabase==2.3.0
+supabase==2.7.0
