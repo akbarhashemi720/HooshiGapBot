@@ -2884,10 +2884,7 @@ def main():
         pass
 
     # صبر کن نسخه قبلی خاموش بشه
-    print("⏳ در حال آماده‌سازی...")
-    time.sleep(3)
-
-    # HTTP server برای Render
+    # HTTP server باید اول شروع بشه تا Render port رو پیدا کنه
     import threading
     from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -2903,6 +2900,9 @@ def main():
     server = HTTPServer(("0.0.0.0", PORT), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     print(f"✅ HTTP server on port {PORT}")
+
+    print("⏳ در حال آماده‌سازی...")
+    time.sleep(3)
 
     app.run_polling(
         drop_pending_updates=True,
