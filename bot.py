@@ -1086,6 +1086,20 @@ async def edit_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["edit_field"] = "عکس"
         await update.message.reply_text("📸 عکس جدید بفرست:", reply_markup=ReplyKeyboardRemove())
         return EDIT_VALUE
+    elif "استان" in choice:
+        context.user_data["edit_field"] = "استان"
+        rows = []
+        row = []
+        for p in PROVINCES:
+            row.append(p)
+            if len(row) == 3:
+                rows.append(row)
+                row = []
+        if row:
+            rows.append(row)
+        rows.append(["🔙 بازگشت"])
+        await update.message.reply_text("🗺 استان جدید رو انتخاب کن:", reply_markup=ReplyKeyboardMarkup(rows, one_time_keyboard=True, resize_keyboard=True))
+        return EDIT_VALUE
     elif "شهر" in choice:
         context.user_data["edit_field"] = "شهر"
         await update.message.reply_text("🏙 شهر جدید بنویس:", reply_markup=ReplyKeyboardRemove())
@@ -1127,6 +1141,11 @@ async def edit_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return EDIT_VALUE
         photo_id = update.message.photo[-1].file_id
         await update_user(my_id, {"photo_id": photo_id})
+    elif field == "استان":
+        if "بازگشت" in update.message.text:
+            await update.message.reply_text("↩️ لغو شد.", reply_markup=main_menu())
+            return ConversationHandler.END
+        await update_user(my_id, {"province": update.message.text})
     elif field == "شهر":
         await update_user(my_id, {"city": update.message.text})
     elif field == "علایق":
@@ -1330,10 +1349,11 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data == "edit_profile_btn":
         from_id = update.effective_user.id
         keyboard = [
-            ["🏙 شهر", "✨ علایق"],
-            ["📸 عکس", "👤 اسم"],
-            ["⚧ جنسیت", "🎂 سن"],
-            ["📍 موقعیت GPS", "🔙 بازگشت"]
+            ["🗺 استان", "🏙 شهر"],
+            ["✨ علایق", "📸 عکس"],
+            ["👤 اسم", "⚧ جنسیت"],
+            ["🎂 سن", "📍 موقعیت GPS"],
+            ["🔙 بازگشت"]
         ]
         await context.bot.send_message(
             chat_id=from_id,
