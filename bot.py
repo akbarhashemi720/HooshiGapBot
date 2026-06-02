@@ -2737,6 +2737,25 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 def main():
+    import threading
+    import time
+    import requests
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+
+    # HTTP server رو فوری بالا بیار تا Render port رو پیدا کنه
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"OK")
+        def log_message(self, *args):
+            pass
+
+    PORT = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", PORT), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    print(f"✅ HTTP server on port {PORT}")
+
     TOKEN = os.environ.get("BOT_TOKEN", "")
     app = Application.builder().token(TOKEN).build()
 
@@ -2872,36 +2891,14 @@ def main():
     app.add_handler(MessageHandler(filters.ANIMATION, forward_media))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_handler))
     print("💜 هوشی‌گپ شروع به کار کرد...")
-    import httpx
-    import requests
-    import time
 
-    # اول webhook رو پاک کن
+    # webhook پاک کن
     try:
         requests.get(f"https://api.telegram.org/bot{TOKEN}/deleteWebhook?drop_pending_updates=true", timeout=5)
         print("✅ Webhook deleted")
     except:
         pass
 
-    # صبر کن نسخه قبلی خاموش بشه
-    # HTTP server باید اول شروع بشه تا Render port رو پیدا کنه
-    import threading
-    from http.server import HTTPServer, BaseHTTPRequestHandler
-
-    class Handler(BaseHTTPRequestHandler):
-        def do_GET(self):
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"OK")
-        def log_message(self, *args):
-            pass
-
-    PORT = int(os.environ.get("PORT", 10000))
-    server = HTTPServer(("0.0.0.0", PORT), Handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    print(f"✅ HTTP server on port {PORT}")
-
-    print("⏳ در حال آماده‌سازی...")
     time.sleep(3)
 
     app.run_polling(
