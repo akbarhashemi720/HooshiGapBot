@@ -131,6 +131,13 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🚫 دسترسی ندارید!")
         return
     stats = await get_user_stats()
+    # اگه banned توی stats نبود، خودمون حساب می‌کنیم
+    if "banned" not in stats:
+        try:
+            banned_users = await db_get("users", "is_banned=eq.true")
+            stats["banned"] = len(banned_users)
+        except:
+            stats["banned"] = 0
     text = (
         f"💜 {BRAND_HEADER}\n"
         f"📊 پنل مدیریت\n"
@@ -1420,6 +1427,32 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["admin_action"] = "vip"
         return
 
+    if query.data.startswith("gift_coins_"):
+        to_id = int(query.data.split("_")[2])
+        from_id = update.effective_user.id
+        if from_id == to_id:
+            await query.answer("❌ نمی‌تونی به خودت سکه هدیه بدی!", show_alert=True)
+            return
+        coins = await get_coins(from_id)
+        if coins < 5:
+            await query.answer("❌ حداقل ۵ سکه لازمه برای هدیه دادن!", show_alert=True)
+            return
+        await deduct_coin(from_id)
+        await deduct_coin(from_id)
+        await deduct_coin(from_id)
+        await deduct_coin(from_id)
+        await deduct_coin(from_id)
+        await add_coins(to_id, 5)
+        await query.answer("🎁 ۵ سکه هدیه دادی!", show_alert=True)
+        try:
+            await context.bot.send_message(
+                chat_id=to_id,
+                text=f"🎁 یک کاربر ۵ سکه به شما هدیه داد!\n💜 از هوشی‌گپ لذت ببرید!"
+            )
+        except:
+            pass
+        return
+
     if query.data.startswith("vmode_"):
         mode = query.data.replace("vmode_", "")
         from_id = update.effective_user.id
@@ -2055,10 +2088,22 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data.startswith("notify_online_"):
         to_id = int(query.data.split("_")[2])
         from_id = update.effective_user.id
-        import httpx
-        headers = {"apikey": "sb_publishable_DBlfUH3YcVEsCJ2m-3tOWg_nJNMBh5R", "Authorization": f"Bearer sb_publishable_DBlfUH3YcVEsCJ2m-3tOWg_nJNMBh5R", "Content-Type": "application/json"}
-        async with httpx.AsyncClient() as client:
-            await client.post("https://ahjdziimhlpynvvwhgiz.supabase.co/rest/v1/online_notifications", json={"user_id": from_id, "target_id": to_id}, headers=headers)
+        if from_id == to_id:
+            await query.answer("❌ نمی‌تونی خودت رو دنبال کنی!", show_alert=True)
+            return
+        # ذخیره در فیلد notify_watchers کاربر هدف
+        to_user = await get_user(to_id)
+        if to_user:
+            watchers = to_user.get("notify_watchers") or []
+            if isinstance(watchers, str):
+                import json
+                try:
+                    watchers = json.loads(watchers)
+                except:
+                    watchers = []
+            if from_id not in watchers:
+                watchers.append(from_id)
+                await update_user(to_id, {"notify_watchers": watchers})
         await query.answer("🔔 وقتی آنلاین شد بهت خبر می‌دیم!", show_alert=True)
         return
 
@@ -2242,17 +2287,28 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     is_match = await check_mutual_like(from_id, to_id)
     if is_match:
+        # شروع خودکار چت بعد از مچ
+        start_chat(from_id, to_id)
         await context.bot.send_message(
             chat_id=from_id,
-            text=f"💜 ماتچ شدید!\n{BRAND_SEPARATOR}\n✨ هوشی‌گپ AI شما رو به هم وصل کرد!"
+            text=f"💜 ماتچ شدید!\n{BRAND_SEPARATOR}\n✨ هوشی‌گپ AI شما رو به هم وصل کرد!\n🔴 برای پایان چت دکمه زیر رو بزن",
+            reply_markup=chat_menu()
         )
         try:
             await context.bot.send_message(
                 chat_id=to_id,
-                text=f"💜 ماتچ شدید!\n{BRAND_SEPARATOR}\n✨ هوشی‌گپ AI شما رو به هم وصل کرد!"
+                text=f"💜 ماتچ شدید!\n{BRAND_SEPARATOR}\n✨ هوشی‌گپ AI شما رو به هم وصل کرد!\n🔴 برای پایان چت دکمه زیر رو بزن",
+                reply_markup=chat_menu()
             )
         except:
             pass
+        # ارسال ویس پروفایل اگه داشتن
+        from_profile = await get_user(from_id)
+        to_profile = await get_user(to_id)
+        if from_profile and from_profile.get("has_voice"):
+            await send_voice_profile(context.bot, to_id, from_profile, is_matched=True)
+        if to_profile and to_profile.get("has_voice"):
+            await send_voice_profile(context.bot, from_id, to_profile, is_matched=True)
     else:
         await context.bot.send_message(chat_id=from_id, text=f"💜 لایک ثبت شد!\n🪙 سکه باقی: {from_coins-1}")
         try:
@@ -2320,6 +2376,12 @@ async def send_dm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def browse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     my_id = update.effective_user.id
+
+    # چک ثبت‌نام
+    if not await user_exists(my_id):
+        await update.message.reply_text("❌ اول ثبت‌نام کن! /register بزن")
+        return
+
     if not check_queue_limit(my_id):
         await update.message.reply_text("⚠️ خیلی سریع! کمی صبر کنید.")
         return
@@ -2344,7 +2406,14 @@ async def random_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from core.users import db_get
     import random
     my_id = update.effective_user.id
-    users = await db_get("users", f"telegram_id=neq.{my_id}")
+
+    # چک ثبت‌نام
+    if not await user_exists(my_id):
+        await update.message.reply_text("❌ اول ثبت‌نام کن! /register بزن")
+        return
+
+    # فقط کاربران عادی — بدون بن‌شده و shadowban
+    users = await db_get("users", f"telegram_id=neq.{my_id}&is_banned=eq.false&shadowban_level=eq.0")
     if not users:
         await update.message.reply_text("😔 فعلا کاربر دیگری نیست!")
         return
@@ -2359,7 +2428,7 @@ async def same_age(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ اول ثبت‌نام کن! /register بزن")
         return
     my_age = my_profile["age"]
-    users = await db_get("users", f"telegram_id=neq.{my_id}&age=eq.{my_age}&limit=5")
+    users = await db_get("users", f"telegram_id=neq.{my_id}&age=eq.{my_age}&is_banned=eq.false&shadowban_level=eq.0&limit=5")
     if not users:
         await update.message.reply_text(f"😔 کسی با سن {my_age} پیدا نشد!")
         return
