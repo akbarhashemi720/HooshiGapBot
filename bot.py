@@ -77,21 +77,20 @@ def format_profile_card(user, extra="", show_link=True):
     gender_emoji = "👦" if user.get("gender") == "پسر" else "👧"
     username = user.get("username", "")
     display_name = user.get("display_name", "")
-    name_line = f"✨ {display_name}\n" if display_name else ""
-    username_line = f"👤 @{username}\n" if username else ""
     online_status = get_online_status_text(user)
     like_count = user.get("like_count", 0)
     lines = []
     if vip_badge:
         lines.append(vip_badge)
-    lines.append(f"🆔 آیدی: {user.get('telegram_id', '-')}")
-    bot_username = user.get("bot_username", "")
-    if bot_username:
-        lines.append(f"👤 /{bot_username}")
     if display_name:
         lines.append(f"✨ {display_name}")
     if username:
         lines.append(f"📱 @{username}")
+    bot_username = user.get("bot_username", "")
+    if bot_username:
+        lines.append(f"🆔 /{bot_username}")
+    else:
+        lines.append(f"🆔 {user.get('telegram_id', '-')}")
     lines.append("")
     lines.append(f"{gender_emoji} جنسیت: {user.get('gender', '-')}")
     lines.append(f"🎂 سن: {user.get('age', '-')}")
@@ -186,6 +185,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if await user_exists(my_id):
         await update_username(my_id, username)
         await update_last_seen(my_id)
+        # اگه bot_username نداره، بساز
+        user = await get_user(my_id)
+        if user and not user.get("bot_username"):
+            await update_user(my_id, {"bot_username": generate_bot_username()})
         await update.message.reply_text(
             f"💜 خوش برگشتی به هوشی‌گپ!\n"
             f"{BRAND_SEPARATOR}\n"
