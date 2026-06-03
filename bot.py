@@ -1366,6 +1366,20 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
+    # dm callbacks — باید اول چک بشن
+    if query.data.startswith("dm_send_"):
+        await handle_dm_callbacks(update, context)
+        return
+    if query.data.startswith("dm_edit_"):
+        await handle_dm_callbacks(update, context)
+        return
+    if query.data.startswith("dm_cancel_"):
+        await handle_dm_callbacks(update, context)
+        return
+    if query.data.startswith("readdm_"):
+        await handle_dm_callbacks(update, context)
+        return
+
     if query.data == "edit_profile_btn":
         from_id = update.effective_user.id
         keyboard = [
