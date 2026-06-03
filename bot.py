@@ -85,10 +85,13 @@ def format_profile_card(user, extra="", show_link=True):
     if vip_badge:
         lines.append(vip_badge)
     lines.append(f"🆔 آیدی: {user.get('telegram_id', '-')}")
+    bot_username = user.get("bot_username", "")
+    if bot_username:
+        lines.append(f"👤 /{bot_username}")
     if display_name:
         lines.append(f"✨ {display_name}")
     if username:
-        lines.append(f"👤 @{username}")
+        lines.append(f"📱 @{username}")
     lines.append("")
     lines.append(f"{gender_emoji} جنسیت: {user.get('gender', '-')}")
     lines.append(f"🎂 سن: {user.get('age', '-')}")
@@ -2820,6 +2823,21 @@ async def interests_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await query.edit_message_text(f"✅ علاقه: {interest}\n\n📸 عکس پروفایلت رو بفرست:\n(اگه عکس نذاری، یه عکس پیش‌فرض برات میذاریم)", reply_markup=skip_keyboard)
     return PHOTO
 
+async def handle_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from core.users import db_get
+    text = update.message.text.strip().lstrip("/")
+    users = await db_get("users", f"bot_username=eq.{text}")
+    if not users:
+        await update.message.reply_text("❌ کاربری با این یوزرنیم پیدا نشد!")
+        return
+    user = users[0]
+    await send_user_card(update, user)
+
+def generate_bot_username():
+    import random, string
+    chars = string.ascii_letters + string.digits
+    return "user_" + "".join(random.choices(chars, k=6))
+
 DEFAULT_PHOTO_BOY = "https://i.imgur.com/4M34hi2.png"
 DEFAULT_PHOTO_GIRL = "https://i.imgur.com/OB0y6MR.png"
 
@@ -2843,8 +2861,11 @@ async def skip_photo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     display_name = data.get("display_name", "")
     if display_name:
         await update_user(update.effective_user.id, {"display_name": display_name})
+    bot_username = generate_bot_username()
+    await update_user(update.effective_user.id, {"bot_username": bot_username})
     await query.edit_message_text(
-        f"💜 ثبت‌نام کامل شد!\n🎁 ۱۰ سکه هدیه گرفتی!\n\n👇 برای شروع /start بزن"
+        f"💜 ثبت‌نام کامل شد!\n🎁 ۱۰ سکه هدیه گرفتی!\n\n"
+        f"🆔 یوزرنیم شما: /{bot_username}\n\n👇 برای شروع /start بزن"
     )
     return ConversationHandler.END
 
@@ -2863,10 +2884,13 @@ async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     display_name = data.get("display_name", "")
     if display_name:
         await update_user(update.effective_user.id, {"display_name": display_name})
+    bot_username = generate_bot_username()
+    await update_user(update.effective_user.id, {"bot_username": bot_username})
     await update.message.reply_text(
         f"💜 ثبت‌نام کامل شد!\n"
         f"{BRAND_SEPARATOR}\n"
         f"🎁 ۱۰ سکه هدیه گرفتی!\n"
+        f"🆔 یوزرنیم شما: /{bot_username}\n"
         f"🤖 هوشی‌گپ AI منتظر مچ کردنته!\n"
         f"{BRAND_SEPARATOR}\n"
         f"{BRAND_FOOTER}",
@@ -2988,6 +3012,7 @@ def main():
     app.add_handler(CommandHandler("invite", invite))
     app.add_handler(CommandHandler("sameage", same_age))
     app.add_handler(CommandHandler("endchat", end_chat_cmd))
+    app.add_handler(MessageHandler(filters.Regex(r"^/user_[a-zA-Z0-9]+$"), handle_user_command))
     new_search_conv = ConversationHandler(
         entry_points=[
             MessageHandler(filters.Regex("جستجو کاربران"), new_search),
