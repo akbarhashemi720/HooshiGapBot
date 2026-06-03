@@ -1366,18 +1366,87 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    # dm callbacks — باید اول چک بشن
     if query.data.startswith("dm_send_"):
-        await handle_dm_callbacks(update, context)
+        to_id = int(query.data.split("_")[2])
+        from_id = update.effective_user.id
+        message_text = context.user_data.get("dm_draft", "")
+        if not message_text:
+            await context.bot.send_message(
+                chat_id=from_id,
+                text=f"📨 پیام پیدا نشد! دوباره بنویس:\n⚠️ حداکثر ۲۰۰ حرف",
+                reply_markup=ReplyKeyboardRemove()
+            )
+            context.user_data["dm_to"] = to_id
+            return
+        coins = await get_coins(from_id)
+        if coins < 1:
+            await context.bot.send_message(chat_id=from_id, text="❌ سکه کافی نداری!")
+            return
+        await deduct_coin(from_id)
+        from datetime import datetime
+        now = datetime.now().strftime("%Y/%m/%d — %H:%M")
+        try:
+            await send_direct_message(from_id, to_id, message_text, True)
+        except:
+            pass
+        notif = (
+            f"📨 پیام خصوصی جدید!\n{BRAND_SEPARATOR}\n"
+            f"🆔 از طرف: {from_id}\n\n"
+            f"📝 متن پیام:\n{message_text}"
+        )
+        kb = InlineKeyboardMarkup([[
+            InlineKeyboardButton("👤 مشاهده پروفایل", callback_data=f"view_{from_id}"),
+            InlineKeyboardButton("✅ خواندم", callback_data=f"readdm_{from_id}")
+        ]])
+        try:
+            await context.bot.send_message(chat_id=to_id, text=notif, reply_markup=kb)
+        except:
+            pass
+        await query.edit_message_text(
+            f"✅ پیام شما ارسال شد!\n{BRAND_SEPARATOR}\n"
+            f"📅 تاریخ: {now}\n"
+            f"📝 متن پیام:\n{message_text}\n\n"
+            f"🔔 وقتی مخاطب پیام رو بخونه بهت اطلاع میدیم."
+        )
+        await context.bot.send_message(chat_id=from_id, text="👇 منوی اصلی:", reply_markup=main_menu())
+        context.user_data["dm_draft"] = None
+        context.user_data["dm_to"] = None
         return
+
     if query.data.startswith("dm_edit_"):
-        await handle_dm_callbacks(update, context)
+        to_id = int(query.data.split("_")[2])
+        from_id = update.effective_user.id
+        context.user_data["dm_to"] = to_id
+        await context.bot.send_message(
+            chat_id=from_id,
+            text=f"✏️ پیام جدید رو بنویس:\n⚠️ حداکثر ۲۰۰ حرف",
+            reply_markup=ReplyKeyboardRemove()
+        )
         return
+
     if query.data.startswith("dm_cancel_"):
-        await handle_dm_callbacks(update, context)
+        context.user_data["dm_draft"] = None
+        context.user_data["dm_to"] = None
+        await query.edit_message_text("❌ پیام لغو شد.")
+        await context.bot.send_message(
+            chat_id=update.effective_user.id,
+            text="👇 منوی اصلی:",
+            reply_markup=main_menu()
+        )
         return
+
     if query.data.startswith("readdm_"):
-        await handle_dm_callbacks(update, context)
+        sender_id = int(query.data.split("_")[1])
+        reader_id = update.effective_user.id
+        try:
+            await query.edit_message_reply_markup(reply_markup=None)
+        except:
+            pass
+        await context.bot.send_message(chat_id=reader_id, text="👇 منوی اصلی:", reply_markup=main_menu())
+        try:
+            await context.bot.send_message(chat_id=sender_id, text="👁 مخاطب پیام شما را خواند! ✅")
+        except:
+            pass
         return
 
     if query.data == "edit_profile_btn":
