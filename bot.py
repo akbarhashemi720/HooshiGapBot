@@ -58,6 +58,7 @@ def main_menu():
     keyboard = [
         ["🤝 به یه ناشناس وصلم کن!"],
         ["🔍 جستجو کاربران", "📍 افراد نزدیک"],
+        ["🎂 هم‌سن‌های من", "💬 چت‌های اخیر"],
         ["🧭 راهنما", "👤 پروفایل", "💰 سکه"],
         ["🔗 معرفی به دوستان (سکه رایگان)"],
         ["🎭 لینک ناشناس من"]
@@ -684,6 +685,10 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if "ناشناس وصلم کن" in text:
         await random_user(update, context)
+    elif "هم‌سن" in text:
+        await same_age(update, context)
+    elif "چت‌های اخیر" in text:
+        await recent_start(update, context)
     elif "جستجو کاربران" in text:
         return await new_search(update, context)
     elif "افراد نزدیک" in text:
