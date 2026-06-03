@@ -2230,7 +2230,15 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    if query.data.startswith("dm_") and not query.data.startswith("dm_send_") and not query.data.startswith("dm_edit_") and not query.data.startswith("dm_cancel_"):
+    if query.data.startswith("view_"):
+        user_id = int(query.data.split("_")[1])
+        from_id = update.effective_user.id
+        user = await get_user(user_id)
+        if not user:
+            await query.answer("❌ کاربر پیدا نشد!", show_alert=True)
+            return
+        await send_user_card(update, user)
+        return
         to_id = int(query.data.split("_")[1])
         from_id = update.effective_user.id
         if from_id == to_id:
@@ -2267,17 +2275,15 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # اطلاع به گیرنده
         notif = (
             f"📨 پیام خصوصی جدید!\n{BRAND_SEPARATOR}\n"
-            f"{'👦' if my_profile.get('gender')=='پسر' else '👧'} | 🎂 {my_profile.get('age')} | 🏙 {my_profile.get('city')}\n\n"
+            f"🆔 از طرف: {from_id}\n\n"
             f"📝 متن پیام:\n{message_text}"
         )
         kb = InlineKeyboardMarkup([[
+            InlineKeyboardButton("👤 مشاهده پروفایل", callback_data=f"view_{from_id}"),
             InlineKeyboardButton("✅ خواندم", callback_data=f"readdm_{from_id}")
         ]])
         try:
-            if my_profile and my_profile.get("photo_id"):
-                await context.bot.send_photo(chat_id=to_id, photo=my_profile["photo_id"], caption=notif, reply_markup=kb)
-            else:
-                await context.bot.send_message(chat_id=to_id, text=notif, reply_markup=kb)
+            await context.bot.send_message(chat_id=to_id, text=notif, reply_markup=kb)
         except:
             pass
         # اطلاع به فرستنده
