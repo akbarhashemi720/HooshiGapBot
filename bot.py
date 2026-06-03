@@ -2295,6 +2295,11 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📝 متن پیام:\n{message_text}\n\n"
             f"🔔 وقتی مخاطب پیام رو بخونه بهت اطلاع میدیم."
         )
+        await context.bot.send_message(
+            chat_id=from_id,
+            text="👇 منوی اصلی:",
+            reply_markup=main_menu()
+        )
         context.user_data["dm_draft"] = None
         context.user_data["dm_to"] = None
         return
@@ -2307,6 +2312,12 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_reply_markup(reply_markup=None)
         except:
             pass
+        # منو به گیرنده
+        await context.bot.send_message(
+            chat_id=reader_id,
+            text="👇 منوی اصلی:",
+            reply_markup=main_menu()
+        )
         # اطلاع به فرستنده
         try:
             await context.bot.send_message(
