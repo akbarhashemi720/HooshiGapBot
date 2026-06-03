@@ -1623,30 +1623,20 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data.startswith("readdm_"):
         parts = query.data.split("_")
-        msg_id = parts[1]
-        from_id = int(parts[2])
-        is_paid = parts[3] == "True"
-        to_id = update.effective_user.id
-        msg = await get_direct_message(msg_id)
-        if not msg:
-            await query.answer("❌ پیام پیدا نشد!", show_alert=True)
-            return
-        if not is_paid:
-            if not await has_enough_coins(to_id):
-                await query.answer("❌ سکه کافی ندارید!", show_alert=True)
-                return
-            await deduct_coin(to_id)
-
-        dm_text = msg.get("message", "")
-        kb = InlineKeyboardMarkup([[
-            InlineKeyboardButton("💬 پاسخ", callback_data=f"chatreq_{from_id}"),
-            InlineKeyboardButton("💜 لایک", callback_data=f"like_{from_id}")
-        ]])
-        await context.bot.send_message(
-            chat_id=to_id,
-            text=f"📨 پیام خصوصی:\n{BRAND_SEPARATOR}\n{dm_text}",
-            reply_markup=kb
-        )
+        sender_id = int(parts[1])
+        reader_id = update.effective_user.id
+        await query.answer("✅ پیام خوانده شد!", show_alert=False)
+        try:
+            await query.edit_message_reply_markup(reply_markup=None)
+        except:
+            pass
+        try:
+            await context.bot.send_message(
+                chat_id=sender_id,
+                text=f"👁 مخاطب پیام شما را خواند! ✅"
+            )
+        except:
+            pass
         return
 
     if query.data == "done":
@@ -2267,31 +2257,56 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("❌ سکه کافی نداری!", show_alert=True)
             return
         await deduct_coin(from_id)
-        msg_id = await send_direct_message(from_id, to_id, message_text, True)
-        my_profile = await get_user(from_id)
         from datetime import datetime
         now = datetime.now().strftime("%Y/%m/%d — %H:%M")
-        if my_profile and msg_id:
-            notif = (
-                f"📨 پیام خصوصی جدید!\n{BRAND_SEPARATOR}\n"
-                f"{'👦' if my_profile.get('gender')=='پسر' else '👧'} | 🎂 {my_profile.get('age')} | 🏙 {my_profile.get('city')}"
-            )
-            kb = InlineKeyboardMarkup([[
-                InlineKeyboardButton("📨 خواندن پیام", callback_data=f"readdm_{msg_id}_{from_id}_True")
-            ]])
-            try:
-                if my_profile.get("photo_id"):
-                    await context.bot.send_photo(chat_id=to_id, photo=my_profile["photo_id"], caption=notif, reply_markup=kb)
-                else:
-                    await context.bot.send_message(chat_id=to_id, text=notif, reply_markup=kb)
-            except:
-                pass
-        await query.edit_message_text(
-            f"✅ پیام شما به کاربر `{to_id}` در تاریخ {now} ارسال شد.\n\n"
+        try:
+            msg_id = await send_direct_message(from_id, to_id, message_text, True)
+        except Exception as e:
+            msg_id = True  # حتی اگه id نگرفتیم، پیام ارسال شده
+        my_profile = await get_user(from_id)
+        # اطلاع به گیرنده
+        notif = (
+            f"📨 پیام خصوصی جدید!\n{BRAND_SEPARATOR}\n"
+            f"{'👦' if my_profile.get('gender')=='پسر' else '👧'} | 🎂 {my_profile.get('age')} | 🏙 {my_profile.get('city')}\n\n"
             f"📝 متن پیام:\n{message_text}"
+        )
+        kb = InlineKeyboardMarkup([[
+            InlineKeyboardButton("✅ خواندم", callback_data=f"readdm_{from_id}")
+        ]])
+        try:
+            if my_profile and my_profile.get("photo_id"):
+                await context.bot.send_photo(chat_id=to_id, photo=my_profile["photo_id"], caption=notif, reply_markup=kb)
+            else:
+                await context.bot.send_message(chat_id=to_id, text=notif, reply_markup=kb)
+        except:
+            pass
+        # اطلاع به فرستنده
+        await query.edit_message_text(
+            f"✅ پیام شما ارسال شد!\n{BRAND_SEPARATOR}\n"
+            f"📅 تاریخ: {now}\n"
+            f"📝 متن پیام:\n{message_text}\n\n"
+            f"🔔 وقتی مخاطب پیام رو بخونه بهت اطلاع میدیم."
         )
         context.user_data["dm_draft"] = None
         context.user_data["dm_to"] = None
+        return
+
+    if query.data.startswith("readdm_"):
+        sender_id = int(query.data.split("_")[1])
+        reader_id = update.effective_user.id
+        await query.answer("✅ پیام خوانده شد!", show_alert=False)
+        try:
+            await query.edit_message_reply_markup(reply_markup=None)
+        except:
+            pass
+        # اطلاع به فرستنده
+        try:
+            await context.bot.send_message(
+                chat_id=sender_id,
+                text=f"👁 مخاطب پیام شما را خواند! ✅"
+            )
+        except:
+            pass
         return
 
     if query.data.startswith("dm_edit_"):
@@ -2356,6 +2371,10 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # فقط like_ رو هندل کن
     if not query.data.startswith("like_"):
+        return
+
+    # جلوگیری از پردازش dm_ callbacks توسط handle_like
+    if query.data.startswith("dm_"):
         return
 
     to_id = int(query.data.split("_")[1])
