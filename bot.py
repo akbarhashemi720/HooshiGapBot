@@ -84,6 +84,7 @@ def format_profile_card(user, extra="", show_link=True):
     lines = []
     if vip_badge:
         lines.append(vip_badge)
+    lines.append(f"🆔 آیدی: {user.get('telegram_id', '-')}")
     if display_name:
         lines.append(f"✨ {display_name}")
     if username:
