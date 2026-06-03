@@ -1369,7 +1369,17 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data.startswith("dm_send_"):
         to_id = int(query.data.split("_")[2])
         from_id = update.effective_user.id
+        # متن پیام رو از پیام پیش‌نمایش بخون
         message_text = context.user_data.get("dm_draft", "")
+        if not message_text:
+            # سعی کن از متن پیام فعلی بخون
+            try:
+                original_text = query.message.text
+                # متن بین "📝 متن پیام:\n" و "\n\n⚠️" رو استخراج کن
+                if "📝 متن پیام:\n" in original_text:
+                    message_text = original_text.split("📝 متن پیام:\n")[1].split("\n\n⚠️")[0].strip()
+            except:
+                pass
         if not message_text:
             await context.bot.send_message(
                 chat_id=from_id,
