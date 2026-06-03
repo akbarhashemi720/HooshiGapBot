@@ -2482,14 +2482,12 @@ async def send_dm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from_id = update.effective_user.id
     message_text = update.message.text
 
-    # چک بیخیال
     if "بیخیال" in message_text or "لغو" in message_text:
         context.user_data["dm_to"] = None
         context.user_data["dm_draft"] = None
         await update.message.reply_text("❌ پیام لغو شد.", reply_markup=main_menu())
         return
 
-    # چک محدودیت ۲۰۰ حرف
     if len(message_text) > 200:
         await update.message.reply_text(
             f"❌ پیام خیلی طولانیه!\n"
@@ -2498,19 +2496,20 @@ async def send_dm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # چک محتوا
     result = await analyze_message(from_id, message_text)
     if result == "toxic":
         await update.message.reply_text("🚫 پیام نامناسب! پیام دیگه‌ای بنویس:")
         return
 
-    # ذخیره پیش‌نویس
     context.user_data["dm_draft"] = message_text
 
-    # نمایش پیش‌نمایش با ۳ دکمه
+    # encode متن پیام توی callback_data
+    import base64
+    encoded = base64.b64encode(message_text.encode()).decode()[:50]
+
     kb = InlineKeyboardMarkup([[
         InlineKeyboardButton("❌ بیخیال", callback_data=f"dm_cancel_{to_id}"),
-        InlineKeyboardButton("✅ ارسال و پین", callback_data=f"dm_send_{to_id}"),
+        InlineKeyboardButton("✅ ارسال", callback_data=f"dm_send_{to_id}"),
         InlineKeyboardButton("✏️ ویرایش", callback_data=f"dm_edit_{to_id}")
     ]])
     await update.message.reply_text(
@@ -2838,7 +2837,13 @@ async def handle_dm_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE
         from_id = update.effective_user.id
         message_text = context.user_data.get("dm_draft", "")
         if not message_text:
-            await query.answer("❌ پیامی نیست!", show_alert=True)
+            await query.answer("❌ پیام پیدا نشد! دوباره بنویس.", show_alert=True)
+            context.user_data["dm_to"] = to_id
+            await context.bot.send_message(
+                chat_id=from_id,
+                text=f"📨 پیام دایرکت\n{BRAND_SEPARATOR}\nپیامت رو دوباره بنویس:\n⚠️ حداکثر ۲۰۰ حرف",
+                reply_markup=ReplyKeyboardRemove()
+            )
             return
         coins = await get_coins(from_id)
         if coins < 1:
