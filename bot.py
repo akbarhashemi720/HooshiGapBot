@@ -74,31 +74,34 @@ def format_profile_card(user, extra="", show_link=True):
     vip_badge = "⭐️ VIP  " if user.get("is_vip") else ""
     voice_badge = get_voice_badge(user)
     user_link = get_user_link(user) if show_link else ""
-    gender_emoji = "👦" if user.get("gender") == "پسر" else "👧"
+    gender = user.get("gender", "پسر")
+    gender_emoji = "👦" if gender == "پسر" else "👧"
     username = user.get("username", "")
     display_name = user.get("display_name", "")
     online_status = get_online_status_text(user)
     like_count = user.get("like_count", 0)
+    bot_username = user.get("bot_username", "")
     lines = []
     if vip_badge:
         lines.append(vip_badge)
+    # اسم یا آیکون جنسیت
     if display_name:
-        lines.append(f"✨ {display_name}")
+        lines.append(f"{gender_emoji} {display_name}")
+    else:
+        lines.append(f"{gender_emoji}")
     if username:
         lines.append(f"📱 @{username}")
-    bot_username = user.get("bot_username", "")
-    if bot_username:
-        lines.append(f"🆔 /{bot_username}")
-    else:
-        lines.append(f"🆔 {user.get('telegram_id', '-')}")
     lines.append("")
-    lines.append(f"{gender_emoji} جنسیت: {user.get('gender', '-')}")
     lines.append(f"🎂 سن: {user.get('age', '-')}")
+    lines.append(f"🗺 استان: {user.get('province', '-')}")
     lines.append(f"🏙 شهر: {user.get('city', '-')}")
     lines.append(f"📡 {online_status}")
     lines.append(f"❤️ لایک: {like_count}")
     if show_link and user_link:
         lines.append(f"🔗 {user_link}")
+    # یوزرنیم داخلی آخر
+    if bot_username:
+        lines.append(f"🆔 /{bot_username}")
     if extra:
         lines.append(extra)
     return "\n".join(lines)
@@ -2826,6 +2829,96 @@ async def interests_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await query.edit_message_text(f"✅ علاقه: {interest}\n\n📸 عکس پروفایلت رو بفرست:\n(اگه عکس نذاری، یه عکس پیش‌فرض برات میذاریم)", reply_markup=skip_keyboard)
     return PHOTO
 
+async def handle_dm_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if query.data.startswith("dm_send_"):
+        to_id = int(query.data.split("_")[2])
+        from_id = update.effective_user.id
+        message_text = context.user_data.get("dm_draft", "")
+        if not message_text:
+            await query.answer("❌ پیامی نیست!", show_alert=True)
+            return
+        coins = await get_coins(from_id)
+        if coins < 1:
+            await query.answer("❌ سکه کافی نداری!", show_alert=True)
+            return
+        await deduct_coin(from_id)
+        from datetime import datetime
+        now = datetime.now().strftime("%Y/%m/%d — %H:%M")
+        try:
+            await send_direct_message(from_id, to_id, message_text, True)
+        except:
+            pass
+        my_profile = await get_user(from_id)
+        notif = (
+            f"📨 پیام خصوصی جدید!\n{BRAND_SEPARATOR}\n"
+            f"🆔 از طرف: {from_id}\n\n"
+            f"📝 متن پیام:\n{message_text}"
+        )
+        kb = InlineKeyboardMarkup([[
+            InlineKeyboardButton("👤 مشاهده پروفایل", callback_data=f"view_{from_id}"),
+            InlineKeyboardButton("✅ خواندم", callback_data=f"readdm_{from_id}")
+        ]])
+        try:
+            await context.bot.send_message(chat_id=to_id, text=notif, reply_markup=kb)
+        except:
+            pass
+        await query.edit_message_text(
+            f"✅ پیام شما ارسال شد!\n{BRAND_SEPARATOR}\n"
+            f"📅 تاریخ: {now}\n"
+            f"📝 متن پیام:\n{message_text}\n\n"
+            f"🔔 وقتی مخاطب پیام رو بخونه بهت اطلاع میدیم."
+        )
+        await context.bot.send_message(chat_id=from_id, text="👇 منوی اصلی:", reply_markup=main_menu())
+        context.user_data["dm_draft"] = None
+        context.user_data["dm_to"] = None
+        return
+
+    if query.data.startswith("dm_edit_"):
+        to_id = int(query.data.split("_")[2])
+        from_id = update.effective_user.id
+        context.user_data["dm_to"] = to_id
+        await context.bot.send_message(
+            chat_id=from_id,
+            text=f"✏️ پیام جدید رو بنویس:\n⚠️ حداکثر ۲۰۰ حرف",
+            reply_markup=ReplyKeyboardRemove()
+        )
+        return
+
+    if query.data.startswith("dm_cancel_"):
+        context.user_data["dm_draft"] = None
+        context.user_data["dm_to"] = None
+        await query.edit_message_text("❌ پیام لغو شد.")
+        await context.bot.send_message(
+            chat_id=update.effective_user.id,
+            text="👇 منوی اصلی:",
+            reply_markup=main_menu()
+        )
+        return
+
+    if query.data.startswith("readdm_"):
+        sender_id = int(query.data.split("_")[1])
+        reader_id = update.effective_user.id
+        try:
+            await query.edit_message_reply_markup(reply_markup=None)
+        except:
+            pass
+        await context.bot.send_message(
+            chat_id=reader_id,
+            text="👇 منوی اصلی:",
+            reply_markup=main_menu()
+        )
+        try:
+            await context.bot.send_message(
+                chat_id=sender_id,
+                text=f"👁 مخاطب پیام شما را خواند! ✅"
+            )
+        except:
+            pass
+        return
+
 async def handle_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from core.users import db_get
     text = update.message.text.strip().lstrip("/")
@@ -3034,6 +3127,7 @@ def main():
     app.add_handler(recent_conv)
     app.add_handler(register_conv)
     app.add_handler(dm_conv)
+    app.add_handler(CallbackQueryHandler(handle_dm_callbacks, pattern="^dm_send_|^dm_edit_|^dm_cancel_|^readdm_"))
     app.add_handler(CallbackQueryHandler(handle_like))
     app.add_handler(MessageHandler(filters.PHOTO, forward_media))
     app.add_handler(MessageHandler(filters.VIDEO, forward_media))
