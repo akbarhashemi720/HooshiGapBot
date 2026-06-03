@@ -3132,7 +3132,7 @@ def main():
     app.add_handler(recent_conv)
     app.add_handler(register_conv)
     app.add_handler(dm_conv)
-    app.add_handler(CallbackQueryHandler(handle_dm_callbacks, pattern="^dm_send_|^dm_edit_|^dm_cancel_|^readdm_"))
+    app.add_handler(CallbackQueryHandler(handle_dm_callbacks, pattern="^(dm_send_|dm_edit_|dm_cancel_|readdm_)"))
     app.add_handler(CallbackQueryHandler(handle_like))
     app.add_handler(MessageHandler(filters.PHOTO, forward_media))
     app.add_handler(MessageHandler(filters.VIDEO, forward_media))
