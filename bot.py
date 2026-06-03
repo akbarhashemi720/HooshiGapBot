@@ -2238,12 +2238,72 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data.startswith("dm_"):
         to_id = int(query.data.split("_")[1])
         from_id = update.effective_user.id
+        if from_id == to_id:
+            await query.answer("❌ نمی‌تونی به خودت پیام بدی!", show_alert=True)
+            return
+        context.user_data["dm_to"] = to_id
+        context.user_data["dm_draft"] = None
+        await context.bot.send_message(
+            chat_id=from_id,
+            text=f"📨 پیام دایرکت\n{BRAND_SEPARATOR}\nپیامت رو بنویس:\n⚠️ حداکثر ۲۰۰ حرف",
+            reply_markup=ReplyKeyboardRemove()
+        )
+        return
+
+    if query.data.startswith("dm_send_"):
+        to_id = int(query.data.split("_")[2])
+        from_id = update.effective_user.id
+        message_text = context.user_data.get("dm_draft", "")
+        if not message_text:
+            await query.answer("❌ پیامی نیست!", show_alert=True)
+            return
+        coins = await get_coins(from_id)
+        if coins < 1:
+            await query.answer("❌ سکه کافی نداری!", show_alert=True)
+            return
+        await deduct_coin(from_id)
+        msg_id = await send_direct_message(from_id, to_id, message_text, True)
+        my_profile = await get_user(from_id)
+        from datetime import datetime
+        now = datetime.now().strftime("%Y/%m/%d — %H:%M")
+        if my_profile and msg_id:
+            notif = (
+                f"📨 پیام خصوصی جدید!\n{BRAND_SEPARATOR}\n"
+                f"{'👦' if my_profile.get('gender')=='پسر' else '👧'} | 🎂 {my_profile.get('age')} | 🏙 {my_profile.get('city')}"
+            )
+            kb = InlineKeyboardMarkup([[
+                InlineKeyboardButton("📨 خواندن پیام", callback_data=f"readdm_{msg_id}_{from_id}_True")
+            ]])
+            try:
+                if my_profile.get("photo_id"):
+                    await context.bot.send_photo(chat_id=to_id, photo=my_profile["photo_id"], caption=notif, reply_markup=kb)
+                else:
+                    await context.bot.send_message(chat_id=to_id, text=notif, reply_markup=kb)
+            except:
+                pass
+        await query.edit_message_text(
+            f"✅ پیام شما به کاربر `{to_id}` در تاریخ {now} ارسال شد.\n\n"
+            f"📝 متن پیام:\n{message_text}"
+        )
+        context.user_data["dm_draft"] = None
+        context.user_data["dm_to"] = None
+        return
+
+    if query.data.startswith("dm_edit_"):
+        to_id = int(query.data.split("_")[2])
+        from_id = update.effective_user.id
         context.user_data["dm_to"] = to_id
         await context.bot.send_message(
             chat_id=from_id,
-            text=f"📨 پیام خصوصی\n{BRAND_SEPARATOR}\nپیامت رو بنویس:",
+            text=f"✏️ پیام جدید رو بنویس:\n⚠️ حداکثر ۲۰۰ حرف",
             reply_markup=ReplyKeyboardRemove()
         )
+        return
+
+    if query.data.startswith("dm_cancel_"):
+        context.user_data["dm_draft"] = None
+        context.user_data["dm_to"] = None
+        await query.edit_message_text("❌ پیام لغو شد.")
         return
 
     if query.data.startswith("accept_"):
@@ -2365,43 +2425,42 @@ async def handle_voice_in_chat(update: Update, context: ContextTypes.DEFAULT_TYP
 async def send_dm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     to_id = context.user_data.get("dm_to")
     if not to_id:
-        await update.message.reply_text("❌ خطای فنی!", reply_markup=main_menu())
-        return ConversationHandler.END
+        return
     from_id = update.effective_user.id
     message_text = update.message.text
-    if not check_rate_limit(from_id):
-        await update.message.reply_text("⚠️ پیام‌ها رو کمتر بفرستید!")
-        return ConversationHandler.END
+
+    # چک محدودیت ۲۰۰ حرف
+    if len(message_text) > 200:
+        await update.message.reply_text(
+            f"❌ پیام خیلی طولانیه!\n{BRAND_SEPARATOR}\n"
+            f"پیام شما {len(message_text)} حرف داره — حداکثر ۲۰۰ حرف مجازه.\n"
+            f"لطفاً پیام کوتاه‌تری بنویس:"
+        )
+        return
+
+    # چک محتوا
     result = await analyze_message(from_id, message_text)
     if result == "toxic":
-        await update.message.reply_text("🚫 پیام نامناسب ارسال نشد!", reply_markup=main_menu())
-        return ConversationHandler.END
-    coins = await get_coins(from_id)
-    is_paid = coins >= 1
-    if is_paid:
-        await deduct_coin(from_id)
-    msg_id = await send_direct_message(from_id, to_id, message_text, is_paid)
-    my_profile = await get_user(from_id)
-    if my_profile and msg_id:
-        vip_badge = "⭐️ VIP  " if my_profile.get("is_vip") else ""
-        voice_badge = get_voice_badge(my_profile)
-        notif = (
-            f"📨 پیام خصوصی جدید!\n{BRAND_SEPARATOR}\n"
-            f"{vip_badge}{voice_badge}\n"
-            f"{'👦' if my_profile.get('gender')=='پسر' else '👧'} | 🎂 {my_profile['age']} | 🏙 {my_profile['city']}"
-        )
-        kb = InlineKeyboardMarkup([[
-            InlineKeyboardButton("📨 خواندن پیام", callback_data=f"readdm_{msg_id}_{from_id}_{is_paid}")
-        ]])
-        try:
-            if my_profile.get("photo_id"):
-                await context.bot.send_photo(chat_id=to_id, photo=my_profile["photo_id"], caption=notif, reply_markup=kb)
-            else:
-                await context.bot.send_message(chat_id=to_id, text=notif, reply_markup=kb)
-        except:
-            pass
-    await update.message.reply_text("✅ پیام ارسال شد!", reply_markup=main_menu())
-    return ConversationHandler.END
+        await update.message.reply_text("🚫 پیام نامناسب! پیام دیگه‌ای بنویس:")
+        return
+
+    # ذخیره پیش‌نویس
+    context.user_data["dm_draft"] = message_text
+
+    # نمایش پیش‌نمایش با ۳ دکمه
+    kb = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("❌ بیخیال", callback_data=f"dm_cancel_{to_id}"),
+            InlineKeyboardButton("✅ ارسال و پین", callback_data=f"dm_send_{to_id}"),
+            InlineKeyboardButton("✏️ ویرایش", callback_data=f"dm_edit_{to_id}")
+        ]
+    ])
+    await update.message.reply_text(
+        f"📨 پیش‌نمایش پیام دایرکت\n{BRAND_SEPARATOR}\n"
+        f"📝 متن پیام:\n{message_text}\n\n"
+        f"{'⚠️ ارسال ۱ سکه هزینه داره' if True else ''}",
+        reply_markup=kb
+    )
 
 async def browse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from core.users import db_get
