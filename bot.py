@@ -2239,6 +2239,8 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         await send_user_card(update, user)
         return
+
+    if query.data.startswith("dm_") and not query.data.startswith("dm_send_") and not query.data.startswith("dm_edit_") and not query.data.startswith("dm_cancel_"):
         to_id = int(query.data.split("_")[1])
         from_id = update.effective_user.id
         if from_id == to_id:
