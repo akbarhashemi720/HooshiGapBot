@@ -529,6 +529,11 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if handled:
         return
 
+    # هندل کردن پیام دایرکت
+    if context.user_data.get("dm_to"):
+        await send_dm_handler(update, context)
+        return
+
     # هندل کردن جستجوی نزدیک با GPS
     if context.user_data.get("waiting_nearby_location") and update.message.location:
         context.user_data["waiting_nearby_location"] = False
@@ -2429,10 +2434,17 @@ async def send_dm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from_id = update.effective_user.id
     message_text = update.message.text
 
+    # چک بیخیال
+    if "بیخیال" in message_text or "لغو" in message_text:
+        context.user_data["dm_to"] = None
+        context.user_data["dm_draft"] = None
+        await update.message.reply_text("❌ پیام لغو شد.", reply_markup=main_menu())
+        return
+
     # چک محدودیت ۲۰۰ حرف
     if len(message_text) > 200:
         await update.message.reply_text(
-            f"❌ پیام خیلی طولانیه!\n{BRAND_SEPARATOR}\n"
+            f"❌ پیام خیلی طولانیه!\n"
             f"پیام شما {len(message_text)} حرف داره — حداکثر ۲۰۰ حرف مجازه.\n"
             f"لطفاً پیام کوتاه‌تری بنویس:"
         )
@@ -2448,17 +2460,15 @@ async def send_dm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["dm_draft"] = message_text
 
     # نمایش پیش‌نمایش با ۳ دکمه
-    kb = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("❌ بیخیال", callback_data=f"dm_cancel_{to_id}"),
-            InlineKeyboardButton("✅ ارسال و پین", callback_data=f"dm_send_{to_id}"),
-            InlineKeyboardButton("✏️ ویرایش", callback_data=f"dm_edit_{to_id}")
-        ]
-    ])
+    kb = InlineKeyboardMarkup([[
+        InlineKeyboardButton("❌ بیخیال", callback_data=f"dm_cancel_{to_id}"),
+        InlineKeyboardButton("✅ ارسال و پین", callback_data=f"dm_send_{to_id}"),
+        InlineKeyboardButton("✏️ ویرایش", callback_data=f"dm_edit_{to_id}")
+    ]])
     await update.message.reply_text(
         f"📨 پیش‌نمایش پیام دایرکت\n{BRAND_SEPARATOR}\n"
         f"📝 متن پیام:\n{message_text}\n\n"
-        f"{'⚠️ ارسال ۱ سکه هزینه داره' if True else ''}",
+        f"⚠️ ارسال ۱ سکه هزینه داره",
         reply_markup=kb
     )
 
