@@ -2419,9 +2419,12 @@ async def browse(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # اگه نتیجه نداد، ساده بگرد
     if not users:
-        users = await db_get("users", f"telegram_id=neq.{my_id}&is_banned=eq.false&shadowban_level=eq.0")
+        all_users = await db_get("users", f"telegram_id=neq.{my_id}")
+        users = [u for u in all_users if not u.get("is_banned") and not u.get("shadowban_level")]
         if blocked_ids:
             users = [u for u in users if u["telegram_id"] not in blocked_ids]
+        if not users:
+            users = all_users
 
     if not users:
         await update.message.reply_text("😔 فعلا کاربر جدیدی نیست!")
@@ -2442,11 +2445,17 @@ async def random_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ اول ثبت‌نام کن! /register بزن")
         return
 
-    # فقط کاربران عادی — بدون بن‌شده و shadowban
-    users = await db_get("users", f"telegram_id=neq.{my_id}&is_banned=eq.false&shadowban_level=eq.0")
-    if not users:
+    # همه کاربران غیر از خودم
+    all_users = await db_get("users", f"telegram_id=neq.{my_id}")
+    if not all_users:
         await update.message.reply_text("😔 فعلا کاربر دیگری نیست!")
         return
+
+    # فیلتر بن‌شده‌ها و shadowban
+    users = [u for u in all_users if not u.get("is_banned") and not u.get("shadowban_level")]
+    if not users:
+        users = all_users  # اگه همه فیلتر شدن، همه رو نشون بده
+
     user = random.choice(users)
     await send_user_card(update, user)
 
